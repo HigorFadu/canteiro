@@ -1,0 +1,6 @@
+{
+  "name": "Canteiro",
+  "description": "Sistema de gestão operacional de canteiros de obras — controle de materiais, ferramentas, EPIs, equipes e andamento.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,403 @@
+@import "tailwindcss";
+
+:root {
+  --bg-primary: #090d16;
+  --bg-secondary: #0f172a;
+  --menu-bg: #090d16;
+  --btn-primary: #2563eb;
+  --btn-primary-text: #ffffff;
+  --btn-secondary: #1e293b;
+  --btn-secondary-text: #ffffff;
+  --text-primary: #ffffff;
+  --text-secondary: #94a3b8;
+  --title-color: #ffffff;
+  --accent-color: #3b82f6;
+  --border-color: #1e293b;
+  --icon-color: #60a5fa;
+  --link-color: #38bdf8;
+  --success-color: #10b981;
+  --warning-color: #f59e0b;
+  --error-color: #ef4444;
+
+  --primary-color: var(--btn-primary);
+  --primary: var(--btn-primary);
+
+  /* Aliases com prefixo --color-* */
+  --color-primary: var(--btn-primary);
+  --color-primary-color: var(--btn-primary);
+  --color-bg-primary: var(--bg-primary);
+  --color-bg-secondary: var(--bg-secondary);
+  --color-menu-bg: var(--menu-bg);
+  --color-btn-primary: var(--btn-primary);
+  --color-btn-primary-text: var(--btn-primary-text);
+  --color-btn-secondary: var(--btn-secondary);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-titles: var(--title-color);
+  --color-accent: var(--accent-color);
+  --color-border: var(--border-color);
+  --color-icon: var(--icon-color);
+  --color-link: var(--link-color);
+  --color-success: var(--success-color);
+  --color-warning: var(--warning-color);
+  --color-error: var(--error-color);
+}
+
+@layer base {
+  html, body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: var(--bg-primary, #090d16);
+    color: var(--text-primary, #ffffff);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+  }
+
+  /* Fim dos Spinners Nativos em inputs numéricos */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-color, #334155);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-color, #475569);
+  }
+}
+
+/* ============================================================== */
+/* MOTOR GLOBAL DE TEMAS (CSS VARIABLES EM TODAS AS TELAS)         */
+/* Vincula automaticamente classes fixas e componentes às         */
+/* variáveis CSS definidas pelo cliente na Identidade Visual.     */
+/* ============================================================== */
+
+/* Classes utilitárias diretas */
+.bg-primary { background-color: var(--primary-color) !important; }
+.text-primary { color: var(--primary-color) !important; }
+.border-primary { border-color: var(--primary-color) !important; }
+.bg-theme-primary { background-color: var(--bg-primary) !important; }
+.bg-theme-secondary { background-color: var(--bg-secondary) !important; }
+.bg-theme-menu { background-color: var(--menu-bg) !important; }
+.btn-theme-primary { background-color: var(--btn-primary) !important; color: var(--btn-primary-text) !important; }
+.btn-theme-secondary { background-color: var(--btn-secondary) !important; color: var(--text-primary) !important; }
+.text-theme-primary { color: var(--text-primary) !important; }
+.text-theme-secondary { color: var(--text-secondary) !important; }
+.text-theme-title { color: var(--title-color) !important; }
+.text-theme-accent { color: var(--accent-color) !important; }
+.border-theme { border-color: var(--border-color) !important; }
+
+/* Menus, Cabeçalhos e Barras de Navegação */
+header,
+aside,
+nav[class*="bg-slate"],
+.bg-theme-menu {
+  background-color: var(--menu-bg) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* Cores de Fundo Secundário (Cards, Modais, Containers) */
+.bg-slate-900,
+.bg-slate-950,
+.bg-slate-900\/95,
+.bg-slate-900\/90,
+.bg-slate-900\/80,
+.bg-slate-900\/70,
+.bg-slate-900\/60,
+.bg-slate-900\/50,
+.bg-slate-900\/40,
+.bg-slate-900\/30,
+.bg-slate-950\/60,
+.bg-slate-950\/80,
+.bg-gray-900,
+.bg-gray-950 {
+  background-color: var(--bg-secondary) !important;
+}
+
+/* Sub-containers e caixas de apoio (quando não são botões) */
+.bg-slate-800:not(button),
+.bg-slate-700:not(button),
+.bg-slate-800\/90:not(button),
+.bg-slate-800\/80:not(button),
+.bg-slate-800\/70:not(button),
+.bg-slate-800\/60:not(button),
+.bg-slate-800\/50:not(button),
+.bg-slate-800\/40:not(button),
+.bg-slate-800\/30:not(button),
+.bg-slate-800\/20:not(button),
+.bg-gray-800:not(button) {
+  background-color: var(--btn-secondary) !important;
+}
+
+/* Botões Secundários */
+button.bg-slate-800,
+button.bg-slate-700,
+button.btn-secondary,
+.btn-secondary,
+button[type="button"].bg-slate-800,
+button[type="button"].bg-slate-700 {
+  background-color: var(--btn-secondary) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+button.bg-slate-800 *,
+button.bg-slate-700 *,
+button.btn-secondary *,
+.btn-secondary * {
+  color: var(--text-primary) !important;
+}
+
+button.bg-slate-800:hover,
+button.bg-slate-700:hover,
+button.btn-secondary:hover {
+  filter: brightness(1.1);
+}
+
+/* Textos e Títulos Gerais */
+h1, h2, h3, h4, h5, h6,
+.text-theme-title {
+  color: var(--title-color) !important;
+}
+
+.text-white:not(button):not(.btn-primary *):not(button *),
+.text-slate-100:not(button):not(button *),
+.text-slate-200:not(button):not(button *),
+.text-gray-100:not(button):not(button *) {
+  color: var(--title-color) !important;
+}
+
+.text-slate-300:not(button):not(button *),
+.text-slate-400,
+.text-slate-500,
+.text-gray-400,
+.text-gray-500,
+.text-theme-secondary {
+  color: var(--text-secondary) !important;
+}
+
+/* Botões Principais - ALTA ESPECIFICIDADE PARA GARANTIR ESTILIZAÇÃO E CONTRASTE */
+button.bg-blue-600,
+button.bg-blue-500,
+button.bg-amber-500,
+button.bg-amber-400,
+button.bg-amber-600,
+button.btn-primary,
+.btn-primary,
+.bg-blue-600,
+.bg-blue-500,
+.bg-amber-500,
+.bg-amber-400,
+button[type="submit"]:not(.btn-danger):not([class*="red"]):not([class*="rose"]) {
+  background-color: var(--btn-primary) !important;
+  color: var(--btn-primary-text) !important;
+}
+
+button.bg-blue-600 *,
+button.bg-blue-500 *,
+button.bg-amber-500 *,
+button.bg-amber-400 *,
+button.bg-amber-600 *,
+button.btn-primary *,
+.btn-primary *,
+button[type="submit"]:not(.btn-danger):not([class*="red"]):not([class*="rose"]) * {
+  color: var(--btn-primary-text) !important;
+}
+
+button.bg-blue-600:hover,
+button.bg-blue-500:hover,
+button.bg-amber-500:hover,
+button.bg-amber-400:hover,
+button.bg-amber-600:hover,
+button.btn-primary:hover,
+button[type="submit"]:not(.btn-danger):not([class*="red"]):not([class*="rose"]):hover {
+  filter: brightness(1.1);
+}
+
+/* Bordas e Divisores */
+.border-slate-800,
+.border-slate-700,
+.border-slate-600,
+.border-slate-700\/60,
+.border-slate-700\/50,
+.border-slate-700\/40,
+.border-slate-800\/80,
+.border-slate-800\/60,
+.border-slate-800\/40,
+.border-gray-800,
+.border-gray-700,
+.divide-slate-800 > :not([hidden]) ~ :not([hidden]),
+.divide-slate-700 > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--border-color) !important;
+}
+
+/* Entradas de Formulário (Inputs, Selects, Textareas) */
+input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="submit"]):not([type="button"]),
+select,
+textarea {
+  background-color: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-secondary) !important;
+  opacity: 0.65;
+}
+
+/* Tabelas */
+table th {
+  color: var(--text-secondary) !important;
+  border-color: var(--border-color) !important;
+}
+
+table td {
+  border-color: var(--border-color) !important;
+}
+
+/* Links & Destaques de Acento */
+.text-blue-400,
+.text-blue-500 {
+  color: var(--accent-color) !important;
+}
+
+.text-emerald-400,
+.text-emerald-500 {
+  color: var(--success-color) !important;
+}
+
+.text-amber-400,
+.text-amber-500 {
+  color: var(--warning-color) !important;
+}
+
+.text-red-400,
+.text-red-500 {
+  color: var(--error-color) !important;
+}
+
+/* ============================================================== */
+/* REGRAS RIGOROSAS DE EXPORTAÇÃO EM PDF & IMPRESSÃO (@media print) */
+/* Oculta menus, barras, botões e cabeçalhos do sistema.          */
+/* Garante diagramação perfeita de Folha A4 White-Label.           */
+/* ============================================================== */
+
+/* Diretiva de impressão essencial */
+@media print {
+  aside, nav, header, button, .no-print {
+    display: none !important;
+  }
+  main, .print-container {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background-color: white !important;
+    color: black !important;
+  }
+  body {
+    overflow: auto !important;
+  }
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm 10mm 15mm 10mm;
+  }
+
+  /* Forçar renderização em fundo claro no papel com cores exatas */
+  html, body {
+    background-color: #ffffff !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    font-size: 10pt !important;
+    line-height: 1.35 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Ocultação obrigatória de toda a casca do sistema operacional */
+  header,
+  aside,
+  nav,
+  .print\:hidden,
+  [data-print-hidden="true"],
+  button:not(.print\:inline-block),
+  .toast-container,
+  #toast-container,
+  .mobile-nav-bar {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    height: 0 !important;
+    width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  /* Liberar o container de main para ocupar 100% da folha A4 */
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    display: block !important;
+  }
+
+  /* Estilização da Folha A4 Document Sheet no papel */
+  .a4-document-sheet {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    display: block !important;
+  }
+
+  /* Evitar quebras de página desajeitadas em tabelas, cards e blocos de assinatura */
+  .a4-section-block,
+  .a4-table-container,
+  .a4-signature-block,
+  tr {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Forçar textos e bordas a terem contraste perfeito na impressão */
+  .print-text-dark {
+    color: #0f172a !important;
+  }
+
+  .print-border-light {
+    border-color: #cbd5e1 !important;
+  }
+
+  .print-bg-subtle {
+    background-color: #f8fafc !important;
+  }
+}
+
