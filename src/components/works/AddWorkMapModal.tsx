@@ -124,6 +124,26 @@ export interface EnvTreeNode {
   totalLeavesCount: number;
 }
 
+export interface BuildingFloorPlan {
+  id: string;
+  name: string;
+  appliedAptFinals: number[];
+  bedrooms: number;
+  suites: number;
+  closets: number;
+  bathrooms: number;
+  lavabos: number;
+  livingRooms: number;
+  kitchens: number;
+  laundry: number;
+  balconies: number;
+  deposits: number;
+  technicalArea: number;
+  hasPrivateElevator: boolean;
+  isDuplex: boolean;
+  hasDuplexInternalElevator: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Componentes Utilitários de Alta Fidelidade para o Passo 2
 // ---------------------------------------------------------------------------
@@ -398,11 +418,13 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
   const [houseBathrooms, setHouseBathrooms] = useState<number>(2);
   const [houseLavabos, setHouseLavabos] = useState<number>(1);
   const [houseGarageSpots, setHouseGarageSpots] = useState<number>(2);
+  const [houseStairsCount, setHouseStairsCount] = useState<number>(0);
+  const [houseElevatorsCount, setHouseElevatorsCount] = useState<number>(0);
   const [hasHouseGourmetArea, setHasHouseGourmetArea] = useState<boolean>(true);
   const [hasHousePool, setHasHousePool] = useState<boolean>(true);
   const [hasHouseBackyardGarden, setHasHouseBackyardGarden] = useState<boolean>(true);
-  const [hasHouseElevatorShaft, setHasHouseElevatorShaft] = useState<boolean>(true);
-  const [hasHouseStairs, setHasHouseStairs] = useState<boolean>(true);
+  const [hasHouseElevatorShaft, setHasHouseElevatorShaft] = useState<boolean>(false);
+  const [hasHouseStairs, setHasHouseStairs] = useState<boolean>(false);
   const [hasTechnicalArea, setHasTechnicalArea] = useState<boolean>(true);
   const [hasBuildingStairs, setHasBuildingStairs] = useState<boolean>(true);
   const [hasBuildingShaft, setHasBuildingShaft] = useState<boolean>(true);
@@ -411,8 +433,115 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
   const [hasAptTechnicalArea, setHasAptTechnicalArea] = useState<boolean>(true);
 
   // 2. 'Prédio Residencial'
+  // Contadores para Torres e Áreas Comuns do Andar (Obras Verticais)
+  const [towersCount, setTowersCount] = useState<number>(1);
+  const [floorStairsCount, setFloorStairsCount] = useState<number>(1);
+  const [floorShaftsCount, setFloorShaftsCount] = useState<number>(1);
+  const [floorElevatorsCount, setFloorElevatorsCount] = useState<number>(2);
+
+  // Múltiplas Plantas (Tipologias) e Cômodos
+  const [buildingFloorPlans, setBuildingFloorPlans] = useState<BuildingFloorPlan[]>([
+    {
+      id: 'planta-1',
+      name: 'Planta Tipo A (Padrão)',
+      appliedAptFinals: [1, 2],
+      bedrooms: 2,
+      suites: 1,
+      closets: 1,
+      bathrooms: 1,
+      lavabos: 1,
+      balconies: 1,
+      deposits: 0,
+      technicalArea: 1,
+      livingRooms: 1,
+      kitchens: 1,
+      laundry: 1,
+      hasPrivateElevator: false,
+      isDuplex: false,
+      hasDuplexInternalElevator: false,
+    },
+  ]);
+
+  // Filtro para Obras Horizontais: Casa, Sobrado, Galpão ou Loteamento/Quadras
+  const isHorizontalWork = isNonVerticalTypology;
+
+  useEffect(() => {
+    if (isHorizontalWork) {
+      setTowersCount(0);
+      setFloorStairsCount(0);
+      setFloorShaftsCount(0);
+      setFloorElevatorsCount(0);
+      setHasBuildingStairs(false);
+      setHasBuildingShaft(false);
+      setHasBuildingElevatorShaft(false);
+      setHasHouseElevatorShaft(false);
+      setHasCondoElevatorShaft(false);
+      setHasWarehouseElevatorShaft(false);
+    } else {
+      if (towersCount === 0) setTowersCount(1);
+      if (floorStairsCount === 0) setFloorStairsCount(1);
+      if (floorShaftsCount === 0) setFloorShaftsCount(1);
+      if (floorElevatorsCount === 0) setFloorElevatorsCount(2);
+    }
+  }, [isHorizontalWork]);
+
+  const handleAddFloorPlan = () => {
+    const nextLetter = String.fromCharCode(65 + buildingFloorPlans.length);
+    const newPlan: BuildingFloorPlan = {
+      id: `planta-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      name: `Planta Tipo ${nextLetter}`,
+      appliedAptFinals: [],
+      bedrooms: 2,
+      suites: 1,
+      closets: 1,
+      bathrooms: 1,
+      lavabos: 1,
+      balconies: 1,
+      deposits: 0,
+      technicalArea: 1,
+      livingRooms: 1,
+      kitchens: 1,
+      laundry: 1,
+      hasPrivateElevator: false,
+      isDuplex: false,
+      hasDuplexInternalElevator: false,
+    };
+    setBuildingFloorPlans((prev) => [...prev, newPlan]);
+  };
+
+  const handleUpdateFloorPlan = (planId: string, updates: Partial<BuildingFloorPlan>) => {
+    setBuildingFloorPlans((prev) =>
+      prev.map((p) => (p.id === planId ? { ...p, ...updates } : p))
+    );
+  };
+
+  const handleRemoveFloorPlan = (planId: string) => {
+    if (buildingFloorPlans.length <= 1) return;
+    setBuildingFloorPlans((prev) => prev.filter((p) => p.id !== planId));
+  };
+
+  const handleToggleAptFinalInPlan = (planId: string, finalNum: number) => {
+    setBuildingFloorPlans((prev) =>
+      prev.map((p) => {
+        if (p.id === planId) {
+          const exists = p.appliedAptFinals.includes(finalNum);
+          return {
+            ...p,
+            appliedAptFinals: exists
+              ? p.appliedAptFinals.filter((f) => f !== finalNum)
+              : [...p.appliedAptFinals, finalNum].sort((a, b) => a - b),
+          };
+        } else {
+          return {
+            ...p,
+            appliedAptFinals: p.appliedAptFinals.filter((f) => f !== finalNum),
+          };
+        }
+      })
+    );
+  };
+
   // Inputs: Subsolos, Garagens (G1, G2...), Andares Tipo, Aptos por Andar.
-  // Cômodos por Apartamento: Quartos, Suítes, Salas, Cozinhas, Banheiros, Lavanderias, Lavabos.
   // Checkboxes: Térreo/Recepção, Lazer/Mezanino, Cobertura/Duplex, Casa de Máquinas, Barrilete, Reservatório Superior, Poço de Elevador.
   const [subsolosCount, setSubsolosCount] = useState<number>(1);
   const [garagesCount, setGaragesCount] = useState<number>(2);
@@ -451,11 +580,13 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
   const [condoBathroomsPerHouse, setCondoBathroomsPerHouse] = useState<number>(1);
   const [condoLavabosPerHouse, setCondoLavabosPerHouse] = useState<number>(1);
   const [condoLaundryPerHouse, setCondoLaundryPerHouse] = useState<number>(1);
+  const [condoStairsCount, setCondoStairsCount] = useState<number>(0);
+  const [condoElevatorsCount, setCondoElevatorsCount] = useState<number>(0);
   const [hasCondoMainGate, setHasCondoMainGate] = useState<boolean>(true);
   const [hasCondoServiceGate, setHasCondoServiceGate] = useState<boolean>(true);
   const [hasCondoSocialClub, setHasCondoSocialClub] = useState<boolean>(true);
   const [hasCondoEte, setHasCondoEte] = useState<boolean>(true);
-  const [hasCondoElevatorShaft, setHasCondoElevatorShaft] = useState<boolean>(true);
+  const [hasCondoElevatorShaft, setHasCondoElevatorShaft] = useState<boolean>(false);
 
   // 4. 'Hospital / Unidade de Saúde'
   // Inputs: Blocos/Alas, Andares, Consultórios por Andar, Salas Cirúrgicas, Leitos de UTI, Quartos de Internação por Andar, Suítes VIP/Isolamento, Lavabos.
@@ -494,11 +625,13 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
   // Checkboxes: Pátio de Manobras, Mezanino Administrativo, Refeitório, Portaria Blindada, Poço de Elevador.
   const [warehouseNaves, setWarehouseNaves] = useState<number>(2);
   const [warehouseDockBatteries, setWarehouseDockBatteries] = useState<number>(8);
+  const [warehouseStairsCount, setWarehouseStairsCount] = useState<number>(0);
+  const [warehouseElevatorsCount, setWarehouseElevatorsCount] = useState<number>(0);
   const [hasWarehouseManeuverYard, setHasWarehouseManeuverYard] = useState<boolean>(true);
   const [hasWarehouseAdminMezzanine, setHasWarehouseAdminMezzanine] = useState<boolean>(true);
   const [hasWarehouseRefectory, setHasWarehouseRefectory] = useState<boolean>(true);
   const [hasWarehouseArmoredGate, setHasWarehouseArmoredGate] = useState<boolean>(true);
-  const [hasWarehouseElevatorShaft, setHasWarehouseElevatorShaft] = useState<boolean>(true);
+  const [hasWarehouseElevatorShaft, setHasWarehouseElevatorShaft] = useState<boolean>(false);
 
   // Passo 3: Árvore de Locais
   const [environments, setEnvironments] = useState<StructuredPhysicalEnvironment[]>([]);
@@ -577,10 +710,12 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
       setHouseKitchens(1);
       setHouseBathrooms(2);
       setHouseGarageSpots(2);
+      setHouseStairsCount(0);
+      setHouseElevatorsCount(0);
       setHasHouseGourmetArea(true);
       setHasHousePool(true);
       setHasHouseBackyardGarden(true);
-      setHasHouseElevatorShaft(true);
+      setHasHouseElevatorShaft(false);
 
       // Reseta condomínio
       setCondoBlocksCount(3);
@@ -595,11 +730,13 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
       setCondoKitchensPerHouse(1);
       setCondoBathroomsPerHouse(1);
       setCondoLaundryPerHouse(1);
+      setCondoStairsCount(0);
+      setCondoElevatorsCount(0);
       setHasCondoMainGate(true);
       setHasCondoServiceGate(true);
       setHasCondoSocialClub(true);
       setHasCondoEte(true);
-      setHasCondoElevatorShaft(true);
+      setHasCondoElevatorShaft(false);
 
       // Reseta hospital
       setHospitalBlocks(2);
@@ -630,11 +767,13 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
       // Reseta galpão
       setWarehouseNaves(2);
       setWarehouseDockBatteries(8);
+      setWarehouseStairsCount(0);
+      setWarehouseElevatorsCount(0);
       setHasWarehouseManeuverYard(true);
       setHasWarehouseAdminMezzanine(true);
       setHasWarehouseRefectory(true);
       setHasWarehouseArmoredGate(true);
-      setHasWarehouseElevatorShaft(true);
+      setHasWarehouseElevatorShaft(false);
 
       setEnvironments([]);
     }
@@ -649,13 +788,62 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
     const list: StructuredPhysicalEnvironment[] = [];
     const timestamp = Date.now();
 
-    // Aliases e variáveis dinâmicas universais (Obrigatório e Dinâmico)
+    // Aliases e variáveis dinâmicas universais
     const hasShaft = hasBuildingShaft;
     const hasEscada = hasBuildingStairs;
     const areaTecnica = technicalAreaCount;
 
+    // Helper para adicionar áreas comuns de pavimento (Escadas, Shafts e Elevadores) em edifícios verticais
+    const appendFloorCommonAreas = (pavimentoNome: string, lvl: number) => {
+      if (!isVerticalBuilding) return;
+
+      // Escadas Comuns do Andar (Escada 1..N)
+      if (floorStairsCount > 0) {
+        for (let s = 1; s <= floorStairsCount; s++) {
+          list.push({
+            id: `env-${timestamp}-${pavimentoNome.toLowerCase().replace(/[^a-z0-9]/g, '-')}-escada-${s}`,
+            name: `${pavimentoNome} - Escada ${s}`,
+            level: lvl,
+            type: 'Circulação Vertical / Escadas',
+          });
+        }
+      }
+
+      // Shafts Comuns do Andar (Shaft 1..N)
+      if (floorShaftsCount > 0) {
+        for (let sh = 1; sh <= floorShaftsCount; sh++) {
+          list.push({
+            id: `env-${timestamp}-${pavimentoNome.toLowerCase().replace(/[^a-z0-9]/g, '-')}-shaft-${sh}`,
+            name: `${pavimentoNome} - Shaft ${sh}`,
+            level: lvl,
+            type: 'Instalações Técnicas / Shaft',
+          });
+        }
+      }
+
+      // Elevadores Comuns do Andar (Elevador Social/Serviço 1..N)
+      if (floorElevatorsCount > 0) {
+        for (let e = 1; e <= floorElevatorsCount; e++) {
+          const elevName =
+            floorElevatorsCount === 1
+              ? 'Elevador Social'
+              : floorElevatorsCount === 2
+              ? e === 1 ? 'Elevador Social' : 'Elevador Serviço'
+              : e <= Math.ceil(floorElevatorsCount / 2)
+              ? `Elevador Social ${e}`
+              : `Elevador Serviço ${e - Math.ceil(floorElevatorsCount / 2)}`;
+          list.push({
+            id: `env-${timestamp}-${pavimentoNome.toLowerCase().replace(/[^a-z0-9]/g, '-')}-elevador-${e}`,
+            name: `${pavimentoNome} - ${elevName}`,
+            level: lvl,
+            type: 'Circulação Vertical / Elevadores',
+          });
+        }
+      }
+    };
+
     // -------------------------------------------------------------------------
-    // 1. 'CASA RESIDENCIAL' OU 'SOBRADO'
+    // 1. 'CASA RESIDENCIAL' OU 'SOBRADO' (OBRA HORIZONTAL)
     // -------------------------------------------------------------------------
     if (isCasaOuSobrado) {
       let houseLevel = 1;
@@ -686,15 +874,6 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
           name: 'Quintal / Jardim',
           level: 0.5,
           type: 'Área Externa',
-        });
-      }
-
-      if (hasHouseElevatorShaft) {
-        list.push({
-          id: `env-${timestamp}-poco-elevador`,
-          name: 'Poço de Elevador',
-          level: 0,
-          type: 'Instalações Técnicas / Circulação Vertical',
         });
       }
 
@@ -770,7 +949,7 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
         }
       }
 
-      // Lógica de Cômodo: Dentro do laço/loop que gera os ambientes da unidade, insira a concatenação da Área Técnica
+      // Área Técnica
       if (areaTecnica > 0) {
         list.push({
           id: `env-${timestamp}-casa-area-tecnica`,
@@ -780,37 +959,32 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
         });
       }
 
-      // Em Sobrado, 'Escada' é apenas um cômodo único opcional da casa, nunca repetido por andar
-      if (isSobrado && hasHouseStairs) {
-        list.push({
-          id: `env-${timestamp}-sobrado-escada`,
-          name: 'Escada',
-          level: houseLevel++,
-          type: 'Circulação / Escada',
-        });
+      // Escadas (Opcional - ex: sobrado com 1 escada)
+      if (houseStairsCount > 0) {
+        for (let s = 1; s <= houseStairsCount; s++) {
+          list.push({
+            id: `env-${timestamp}-casa-escada-${s}`,
+            name: houseStairsCount === 1 ? 'Escada' : `Escada ${s}`,
+            level: houseLevel++,
+            type: 'Circulação Vertical / Escadas',
+          });
+        }
       }
 
-      // PROIBIDO concatenar 'Shaft' e 'Escada' em Quadras, Lotes, Casas ou Galpões.
-      // Eles só devem ser injetados nos pavimentos se isVerticalBuilding === true.
-      if (isVerticalBuilding && hasShaft) {
-        list.push({
-          id: `env-${timestamp}-casa-shaft`,
-          name: `${nomeNivel} - Shaft`,
-          level: houseLevel++,
-          type: 'Instalações Técnicas / Shaft',
-        });
-      }
-      if (isVerticalBuilding && hasEscada) {
-        list.push({
-          id: `env-${timestamp}-casa-escada`,
-          name: `${nomeNivel} - Escada`,
-          level: houseLevel++,
-          type: 'Circulação Vertical / Escadas',
-        });
+      // Elevadores (Opcional - ex: casa de alto padrão com 1 elevador)
+      if (houseElevatorsCount > 0) {
+        for (let e = 1; e <= houseElevatorsCount; e++) {
+          list.push({
+            id: `env-${timestamp}-casa-elevador-${e}`,
+            name: houseElevatorsCount === 1 ? 'Elevador' : `Elevador ${e}`,
+            level: houseLevel++,
+            type: 'Circulação Vertical / Elevadores',
+          });
+        }
       }
     }
     // -------------------------------------------------------------------------
-    // 2. 'PRÉDIO RESIDENCIAL'
+    // 2. 'PRÉDIO RESIDENCIAL' (OBRA VERTICAL)
     // -------------------------------------------------------------------------
     else if (isPredioResidencial) {
       // 1. Subsolos (Níveis Raiz independentes: Subsolo 1, Subsolo 2...)
@@ -823,8 +997,7 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
             level: -i,
             type: 'Subsolo',
           });
-          if (isVerticalBuilding && hasShaft) list.push({ id: `env-${timestamp}-subsolo-${i}-shaft`, name: `${variavelDoPavimentoAtual} - Shaft`, level: -i, type: 'Instalações Técnicas / Shaft' });
-          if (isVerticalBuilding && hasEscada) list.push({ id: `env-${timestamp}-subsolo-${i}-escada`, name: `${variavelDoPavimentoAtual} - Escada`, level: -i, type: 'Circulação Vertical / Escadas' });
+          appendFloorCommonAreas(variavelDoPavimentoAtual, -i);
         }
       }
 
@@ -835,11 +1008,10 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
           list.push({
             id: `env-${timestamp}-g${i}`,
             name: variavelDoPavimentoAtual,
-            level: -(garagesCount - i + 1),
+            level: -i,
             type: 'Garagem',
           });
-          if (isVerticalBuilding && hasShaft) list.push({ id: `env-${timestamp}-g${i}-shaft`, name: `${variavelDoPavimentoAtual} - Shaft`, level: -(garagesCount - i + 1), type: 'Instalações Técnicas / Shaft' });
-          if (isVerticalBuilding && hasEscada) list.push({ id: `env-${timestamp}-g${i}-escada`, name: `${variavelDoPavimentoAtual} - Escada`, level: -(garagesCount - i + 1), type: 'Circulação Vertical / Escadas' });
+          appendFloorCommonAreas(variavelDoPavimentoAtual, -i);
         }
       }
 
@@ -852,8 +1024,7 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
           level: 0,
           type: 'Acesso / Térreo',
         });
-        if (isVerticalBuilding && hasShaft) list.push({ id: `env-${timestamp}-terreo-shaft`, name: `${variavelDoPavimentoAtual} - Shaft`, level: 0, type: 'Instalações Técnicas / Shaft' });
-        if (isVerticalBuilding && hasEscada) list.push({ id: `env-${timestamp}-terreo-escada`, name: `${variavelDoPavimentoAtual} - Escada`, level: 0, type: 'Circulação Vertical / Escadas' });
+        appendFloorCommonAreas(variavelDoPavimentoAtual, 0);
       }
 
       // 4. Lazer / Mezanino
@@ -865,173 +1036,208 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
           level: 0.5,
           type: 'Área Comum / Lazer',
         });
-        if (hasShaft) list.push({ id: `env-${timestamp}-lazer-shaft`, name: `${variavelDoPavimentoAtual} - Shaft`, level: 0.5, type: 'Instalações Técnicas / Shaft' });
-        if (hasEscada) list.push({ id: `env-${timestamp}-lazer-escada`, name: `${variavelDoPavimentoAtual} - Escada`, level: 0.5, type: 'Circulação Vertical / Escadas' });
+        appendFloorCommonAreas(variavelDoPavimentoAtual, 0.5);
       }
 
-      // 5. Andares Tipo com sub-loop de Aptos por Andar e terceiro nível de Cômodos por Apto (Loop Triplo)
+      // 5. Torres e Andares Tipo com Múltiplas Plantas e Cômodos
       let pLevel = 1;
-      for (let f = 1; f <= typicalFloors; f++) {
-        const nomeAndar = `${f}º Andar`;
-        const nomeNivel = nomeAndar;
+      const numTorres = Math.max(1, towersCount);
 
-        if (aptsPerFloor <= 0) {
-          list.push({
-            id: `env-${timestamp}-tipo-${f}`,
-            name: `${nomeAndar} Tipo`,
-            level: pLevel++,
-            type: 'Pavimento Tipo',
-          });
-        } else {
-          for (let a = 1; a <= aptsPerFloor; a++) {
-            const aptCode = aptsPerFloor < 10 ? `${f}${a}` : `${f}${String(a).padStart(2, '0')}`;
-            const nomeUnidade = `Apto ${aptCode}`;
-            const prefixoUnidade = `${nomeAndar} - ${nomeUnidade}`;
+      for (let t = 1; t <= numTorres; t++) {
+        const towerLetter = String.fromCharCode(64 + t);
+        const towerPrefix = numTorres > 1 ? `Torre ${towerLetter} - ` : 'Torre A - ';
 
-            const hasRooms =
-              buildingLivingRoomsPerApt > 0 ||
-              buildingSuitesPerApt > 0 ||
-              buildingBedroomsPerApt > 0 ||
-              buildingKitchensPerApt > 0 ||
-              buildingBathroomsPerApt > 0 ||
-              buildingLaundryPerApt > 0 ||
-              buildingLavabosPerApt > 0 ||
-              areaTecnica > 0;
+        for (let f = 1; f <= typicalFloors; f++) {
+          const nomeAndar = `${f}º Andar`;
+          const pAndarPrefix = `${towerPrefix}${nomeAndar}`;
 
-            if (!hasRooms) {
-              list.push({
-                id: `env-${timestamp}-tipo-${f}-apto-${a}`,
-                name: prefixoUnidade,
-                level: pLevel++,
-                type: 'Apartamento',
-              });
-            } else {
+          if (aptsPerFloor <= 0) {
+            list.push({
+              id: `env-${timestamp}-t${t}-tipo-${f}`,
+              name: `${pAndarPrefix} Tipo`,
+              level: pLevel++,
+              type: 'Pavimento Tipo',
+            });
+          } else {
+            for (let a = 1; a <= aptsPerFloor; a++) {
+              const aptCode = aptsPerFloor < 10 ? `${f}${a}` : `${f}${String(a).padStart(2, '0')}`;
+              const nomeUnidade = `Apto ${aptCode}`;
+              const prefixoUnidade = `${pAndarPrefix} - ${nomeUnidade}`;
+
+              // Identificar a tipologia/planta associada a este final de apartamento
+              const assignedPlan =
+                buildingFloorPlans.find((p) => p.appliedAptFinals.includes(a)) ||
+                buildingFloorPlans[0];
+
               // Salas
-              for (let s = 1; s <= buildingLivingRoomsPerApt; s++) {
+              for (let s = 1; s <= (assignedPlan?.livingRooms || 0); s++) {
                 list.push({
-                  id: `env-${timestamp}-tipo-${f}-apto-${a}-sala-${s}`,
-                  name: buildingLivingRoomsPerApt === 1 ? `${prefixoUnidade} - Sala` : `${prefixoUnidade} - Sala ${s}`,
+                  id: `env-${timestamp}-t${t}-f${f}-a${a}-sala-${s}`,
+                  name: assignedPlan.livingRooms === 1 ? `${prefixoUnidade} - Sala` : `${prefixoUnidade} - Sala ${s}`,
                   level: pLevel++,
                   type: 'Apartamento / Sala',
                 });
               }
 
-              // Suítes
-              for (let st = 1; st <= buildingSuitesPerApt; st++) {
+              // Suítes e Regra do Closet (estritamente dentro da Suíte ou Quarto)
+              let closetsRemaining = assignedPlan?.closets || 0;
+              for (let st = 1; st <= (assignedPlan?.suites || 0); st++) {
                 list.push({
-                  id: `env-${timestamp}-tipo-${f}-apto-${a}-suite-${st}`,
+                  id: `env-${timestamp}-t${t}-f${f}-a${a}-suite-${st}`,
                   name: `${prefixoUnidade} - Suíte ${st}`,
                   level: pLevel++,
                   type: 'Apartamento / Suíte',
                 });
+                if (closetsRemaining > 0) {
+                  list.push({
+                    id: `env-${timestamp}-t${t}-f${f}-a${a}-suite-${st}-closet`,
+                    name: `${prefixoUnidade} - Suíte ${st} - Closet`,
+                    level: pLevel++,
+                    type: 'Apartamento / Closet',
+                  });
+                  closetsRemaining--;
+                }
               }
 
               // Quartos
-              for (let q = 1; q <= buildingBedroomsPerApt; q++) {
+              for (let q = 1; q <= (assignedPlan?.bedrooms || 0); q++) {
                 list.push({
-                  id: `env-${timestamp}-tipo-${f}-apto-${a}-quarto-${q}`,
-                  name: buildingBedroomsPerApt === 1 ? `${prefixoUnidade} - Quarto` : `${prefixoUnidade} - Quarto ${q}`,
+                  id: `env-${timestamp}-t${t}-f${f}-a${a}-quarto-${q}`,
+                  name: assignedPlan.bedrooms === 1 ? `${prefixoUnidade} - Quarto` : `${prefixoUnidade} - Quarto ${q}`,
                   level: pLevel++,
                   type: 'Apartamento / Quarto',
                 });
+                if (closetsRemaining > 0) {
+                  list.push({
+                    id: `env-${timestamp}-t${t}-f${f}-a${a}-quarto-${q}-closet`,
+                    name: `${prefixoUnidade} - Quarto ${q} - Closet`,
+                    level: pLevel++,
+                    type: 'Apartamento / Closet',
+                  });
+                  closetsRemaining--;
+                }
               }
 
               // Cozinhas
-              for (let k = 1; k <= buildingKitchensPerApt; k++) {
+              for (let k = 1; k <= (assignedPlan?.kitchens || 0); k++) {
                 list.push({
-                  id: `env-${timestamp}-tipo-${f}-apto-${a}-coz-${k}`,
-                  name: buildingKitchensPerApt === 1 ? `${prefixoUnidade} - Cozinha` : `${prefixoUnidade} - Cozinha ${k}`,
+                  id: `env-${timestamp}-t${t}-f${f}-a${a}-coz-${k}`,
+                  name: assignedPlan.kitchens === 1 ? `${prefixoUnidade} - Cozinha` : `${prefixoUnidade} - Cozinha ${k}`,
                   level: pLevel++,
                   type: 'Apartamento / Cozinha',
                 });
               }
 
-              // Banheiros
-              for (let b = 1; b <= buildingBathroomsPerApt; b++) {
-                list.push({
-                  id: `env-${timestamp}-tipo-${f}-apto-${a}-banh-${b}`,
-                  name: buildingBathroomsPerApt === 1 ? `${prefixoUnidade} - Banheiro` : `${prefixoUnidade} - Banheiro ${b}`,
-                  level: pLevel++,
-                  type: 'Apartamento / Banheiro',
-                });
-              }
-
-              // Lavanderias
-              for (let l = 1; l <= buildingLaundryPerApt; l++) {
-                list.push({
-                  id: `env-${timestamp}-tipo-${f}-apto-${a}-lav-${l}`,
-                  name: buildingLaundryPerApt === 1 ? `${prefixoUnidade} - Lavanderia` : `${prefixoUnidade} - Lavanderia ${l}`,
-                  level: pLevel++,
-                  type: 'Apartamento / Lavanderia',
-                });
+              // Banheiros Sociais (podendo ser 0!)
+              if (assignedPlan?.bathrooms && assignedPlan.bathrooms > 0) {
+                for (let b = 1; b <= assignedPlan.bathrooms; b++) {
+                  list.push({
+                    id: `env-${timestamp}-t${t}-f${f}-a${a}-banh-${b}`,
+                    name: assignedPlan.bathrooms === 1 ? `${prefixoUnidade} - Banheiro Social` : `${prefixoUnidade} - Banheiro Social ${b}`,
+                    level: pLevel++,
+                    type: 'Apartamento / Banheiro Social',
+                  });
+                }
               }
 
               // Lavabos
-              for (let l = 1; l <= buildingLavabosPerApt; l++) {
+              for (let l = 1; l <= (assignedPlan?.lavabos || 0); l++) {
                 list.push({
-                  id: `env-${timestamp}-tipo-${f}-apto-${a}-lavabo-${l}`,
-                  name: buildingLavabosPerApt === 1 ? `${prefixoUnidade} - Lavabo` : `${prefixoUnidade} - Lavabo ${l}`,
+                  id: `env-${timestamp}-t${t}-f${f}-a${a}-lavabo-${l}`,
+                  name: assignedPlan.lavabos === 1 ? `${prefixoUnidade} - Lavabo` : `${prefixoUnidade} - Lavabo ${l}`,
                   level: pLevel++,
                   type: 'Apartamento / Lavabo',
                 });
               }
 
-              // Lógica de Cômodo: Dentro do laço/loop que gera os ambientes da unidade (Apto, Consultório, etc.), insira a concatenação da Área Técnica (Ex: ${nomeAndar} - ${nomeUnidade} - Área Técnica)
-              if (areaTecnica > 0) {
+              // Sacadas (0, 1, 2...)
+              for (let sc = 1; sc <= (assignedPlan?.balconies || 0); sc++) {
                 list.push({
-                  id: `env-${timestamp}-tipo-${f}-apto-${a}-area-tecnica`,
-                  name: `${nomeAndar} - ${nomeUnidade} - Área Técnica`,
+                  id: `env-${timestamp}-t${t}-f${f}-a${a}-sacada-${sc}`,
+                  name: assignedPlan.balconies === 1 ? `${prefixoUnidade} - Sacada` : `${prefixoUnidade} - Sacada ${sc}`,
+                  level: pLevel++,
+                  type: 'Apartamento / Sacada',
+                });
+              }
+
+              // Lavanderias
+              for (let ld = 1; ld <= (assignedPlan?.laundry || 0); ld++) {
+                list.push({
+                  id: `env-${timestamp}-t${t}-f${f}-a${a}-lav-${ld}`,
+                  name: assignedPlan.laundry === 1 ? `${prefixoUnidade} - Lavanderia` : `${prefixoUnidade} - Lavanderia ${ld}`,
+                  level: pLevel++,
+                  type: 'Apartamento / Lavanderia',
+                });
+              }
+
+              // Depósitos
+              for (let d = 1; d <= (assignedPlan?.deposits || 0); d++) {
+                list.push({
+                  id: `env-${timestamp}-t${t}-f${f}-a${a}-deposito-${d}`,
+                  name: assignedPlan.deposits === 1 ? `${prefixoUnidade} - Depósito` : `${prefixoUnidade} - Depósito ${d}`,
+                  level: pLevel++,
+                  type: 'Apartamento / Depósito',
+                });
+              }
+
+              // Área Técnica
+              for (let at = 1; at <= (assignedPlan?.technicalArea || 0); at++) {
+                list.push({
+                  id: `env-${timestamp}-t${t}-f${f}-a${a}-area-tecnica-${at}`,
+                  name: assignedPlan.technicalArea === 1 ? `${prefixoUnidade} - Área Técnica` : `${prefixoUnidade} - Área Técnica ${at}`,
                   level: pLevel++,
                   type: 'Apartamento / Área Técnica',
                 });
               }
+
+              // Elevador Privativo (Hall da Unidade)
+              if (assignedPlan?.hasPrivateElevator) {
+                list.push({
+                  id: `env-${timestamp}-t${t}-f${f}-a${a}-hall-privativo`,
+                  name: `${prefixoUnidade} - Hall Privativo com Elevador`,
+                  level: pLevel++,
+                  type: 'Apartamento / Elevador Privativo',
+                });
+              }
+
+              // Opção Duplex com Elevador Interno Exclusivo do Duplex
+              if (assignedPlan?.isDuplex) {
+                list.push({
+                  id: `env-${timestamp}-t${t}-f${f}-a${a}-mezanino-duplex`,
+                  name: `${prefixoUnidade} - Mezanino Duplex`,
+                  level: pLevel++,
+                  type: 'Apartamento / Duplex',
+                });
+                if (assignedPlan?.hasDuplexInternalElevator) {
+                  list.push({
+                    id: `env-${timestamp}-t${t}-f${f}-a${a}-elevador-duplex`,
+                    name: `${prefixoUnidade} - Elevador Interno Exclusivo do Duplex`,
+                    level: pLevel++,
+                    type: 'Apartamento / Elevador Duplex',
+                  });
+                }
+              }
             }
           }
-        }
 
-        // Lógica de Pavimento: No final de qualquer laço que crie um nível raiz, insira:
-        if (isVerticalBuilding && hasShaft) {
-          list.push({
-            id: `env-${timestamp}-andar-${f}-shaft`,
-            name: `${nomeNivel} - Shaft`,
-            level: pLevel++,
-            type: 'Instalações Técnicas / Shaft',
-          });
-        }
-        if (isVerticalBuilding && hasEscada) {
-          list.push({
-            id: `env-${timestamp}-andar-${f}-escada`,
-            name: `${nomeNivel} - Escada`,
-            level: pLevel++,
-            type: 'Circulação Vertical / Escadas',
-          });
+          // Áreas Comuns por Andar: Escada 1..N, Shaft 1..N e Elevador Social/Serviço 1..N
+          appendFloorCommonAreas(pAndarPrefix, pLevel++);
         }
       }
 
       // 6. Cobertura / Duplex
       if (hasPenthouse) {
-        const nomeNivel = 'Cobertura';
-        list.push({
-          id: `env-${timestamp}-cobertura-duplex`,
-          name: `${nomeNivel} / Duplex`,
-          level: typicalFloors + 1,
-          type: 'Cobertura',
-        });
-        if (isVerticalBuilding && hasShaft) {
+        for (let t = 1; t <= numTorres; t++) {
+          const towerLetter = String.fromCharCode(64 + t);
+          const towerPrefix = numTorres > 1 ? `Torre ${towerLetter} - ` : 'Torre A - ';
+          const nomeNivel = `${towerPrefix}Cobertura / Duplex`;
           list.push({
-            id: `env-${timestamp}-cobertura-shaft`,
-            name: `${nomeNivel} - Shaft`,
+            id: `env-${timestamp}-t${t}-cobertura-duplex`,
+            name: nomeNivel,
             level: typicalFloors + 1,
-            type: 'Instalações Técnicas / Shaft',
+            type: 'Cobertura',
           });
-        }
-        if (isVerticalBuilding && hasEscada) {
-          list.push({
-            id: `env-${timestamp}-cobertura-escada`,
-            name: `${nomeNivel} - Escada`,
-            level: typicalFloors + 1,
-            type: 'Circulação Vertical / Escadas',
-          });
+          appendFloorCommonAreas(nomeNivel, typicalFloors + 1);
         }
       }
 
@@ -1071,7 +1277,7 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
       }
     }
     // -------------------------------------------------------------------------
-    // 3. 'CONDOMÍNIO / LOTEAMENTO'
+    // 3. 'CONDOMÍNIO / LOTEAMENTO' (OBRA HORIZONTAL)
     // -------------------------------------------------------------------------
     else if (isCondominioLoteamento) {
       let cLevel = 1;
@@ -1123,7 +1329,7 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
         });
       }
 
-      // Quadras com Lotes por Quadra (Estritamente Quadra X - Lote Y para evitar duplicidade de item solto e pasta)
+      // Quadras com Lotes por Quadra (Estritamente Quadra X - Lote Y para evitar duplicidade de cabeçalho solto)
       for (let q = 1; q <= condoBlocksCount; q++) {
         const letter = String.fromCharCode(64 + q);
         const quadraName = `Quadra ${letter}`;
@@ -1144,34 +1350,6 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
             type: 'Setor Residencial / Quadra',
           });
         }
-
-        // Shaft e Escada PROIBIDOS em Quadras/Lotes (somente se isVerticalBuilding === true)
-        if (isVerticalBuilding && hasShaft) {
-          list.push({
-            id: `env-${timestamp}-quadra-${letter}-shaft`,
-            name: `${quadraName} - Shaft`,
-            level: cLevel++,
-            type: 'Instalações Técnicas / Shaft',
-          });
-        }
-        if (isVerticalBuilding && hasEscada) {
-          list.push({
-            id: `env-${timestamp}-quadra-${letter}-escada`,
-            name: `${quadraName} - Escada`,
-            level: cLevel++,
-            type: 'Circulação Vertical / Escadas',
-          });
-        }
-      }
-
-      // Checkbox Poço de Elevador
-      if (hasCondoElevatorShaft) {
-        list.push({
-          id: `env-${timestamp}-condo-elevador`,
-          name: 'Poço de Elevador',
-          level: 0,
-          type: 'Instalações Técnicas / Circulação Vertical',
-        });
       }
 
       // Helper para geração aninhada de cômodos por unidade habitacional
@@ -1297,6 +1475,30 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
       if (condoMansions > 0) {
         for (let i = 1; i <= condoMansions; i++) {
           appendUnitWithRooms('Mansão', i, 'Mansão');
+        }
+      }
+
+      // Escadas (Opcional - ex: escadas em desníveis ou áreas comuns)
+      if (condoStairsCount > 0) {
+        for (let s = 1; s <= condoStairsCount; s++) {
+          list.push({
+            id: `env-${timestamp}-condo-escada-${s}`,
+            name: condoStairsCount === 1 ? 'Escada' : `Escada ${s}`,
+            level: cLevel++,
+            type: 'Circulação Vertical / Escadas',
+          });
+        }
+      }
+
+      // Elevadores (Opcional - ex: elevadores de acessibilidade/clube)
+      if (condoElevatorsCount > 0) {
+        for (let e = 1; e <= condoElevatorsCount; e++) {
+          list.push({
+            id: `env-${timestamp}-condo-elevador-${e}`,
+            name: condoElevatorsCount === 1 ? 'Elevador' : `Elevador ${e}`,
+            level: cLevel++,
+            type: 'Circulação Vertical / Elevadores',
+          });
         }
       }
     }
@@ -1539,27 +1741,27 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
     else if (isPredioComercialShopping) {
       // 1. Subsolos
       if (commercialSubsolos > 0) {
-        for (let g = 1; g <= commercialSubsolos; g++) {
-          const nomeNivel = `Subsolo ${g}`;
+        for (let s = 1; s <= commercialSubsolos; s++) {
+          const nomeNivel = `Subsolo ${s}`;
           list.push({
-            id: `env-${timestamp}-subsolo-${g}`,
+            id: `env-${timestamp}-subsolo-${s}`,
             name: nomeNivel,
-            level: -g,
+            level: -s,
             type: 'Subsolo',
           });
           if (hasShaft) {
             list.push({
-              id: `env-${timestamp}-subsolo-${g}-shaft`,
+              id: `env-${timestamp}-subsolo-${s}-shaft`,
               name: `${nomeNivel} - Shaft`,
-              level: -g,
+              level: -s,
               type: 'Instalações Técnicas / Shaft',
             });
           }
           if (hasEscada) {
             list.push({
-              id: `env-${timestamp}-subsolo-${g}-escada`,
+              id: `env-${timestamp}-subsolo-${s}-escada`,
               name: `${nomeNivel} - Escada`,
-              level: -g,
+              level: -s,
               type: 'Circulação Vertical / Escadas',
             });
           }
@@ -1739,23 +1941,6 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
           });
         }
 
-        // Shaft e Escadas PROIBIDOS em Galpão (somente injetados se isVerticalBuilding === true)
-        if (isVerticalBuilding && hasShaft) {
-          list.push({
-            id: `env-${timestamp}-nave-${n}-shaft`,
-            name: `${nomeNivel} - Shaft`,
-            level: whLevel++,
-            type: 'Instalações Técnicas / Shaft',
-          });
-        }
-        if (isVerticalBuilding && hasEscada) {
-          list.push({
-            id: `env-${timestamp}-nave-${n}-escada`,
-            name: `${nomeNivel} - Escada`,
-            level: whLevel++,
-            type: 'Circulação Vertical / Escadas',
-          });
-        }
       }
 
       // Baterias de Docas
@@ -1777,22 +1962,6 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
           level: whLevel++,
           type: 'Mezanino Administrativo',
         });
-        if (isVerticalBuilding && hasShaft) {
-          list.push({
-            id: `env-${timestamp}-mezanino-shaft`,
-            name: `${nomeNivel} - Shaft`,
-            level: whLevel++,
-            type: 'Instalações Técnicas / Shaft',
-          });
-        }
-        if (isVerticalBuilding && hasEscada) {
-          list.push({
-            id: `env-${timestamp}-mezanino-escada`,
-            name: `${nomeNivel} - Escada`,
-            level: whLevel++,
-            type: 'Circulação Vertical / Escadas',
-          });
-        }
       }
 
       // Refeitório
@@ -1805,13 +1974,28 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
         });
       }
 
-      if (hasWarehouseElevatorShaft) {
-        list.push({
-          id: `env-${timestamp}-poco-elevador`,
-          name: 'Poço de Elevador',
-          level: 0,
-          type: 'Transporte Vertical / Monta-Cargas',
-        });
+      // Escadas (Opcional - ex: escada do mezanino ou docas)
+      if (warehouseStairsCount > 0) {
+        for (let s = 1; s <= warehouseStairsCount; s++) {
+          list.push({
+            id: `env-${timestamp}-galpao-escada-${s}`,
+            name: warehouseStairsCount === 1 ? 'Escada' : `Escada ${s}`,
+            level: whLevel++,
+            type: 'Circulação Vertical / Escadas',
+          });
+        }
+      }
+
+      // Elevadores (Opcional - ex: monta-cargas / elevador de carga)
+      if (warehouseElevatorsCount > 0) {
+        for (let e = 1; e <= warehouseElevatorsCount; e++) {
+          list.push({
+            id: `env-${timestamp}-galpao-elevador-${e}`,
+            name: warehouseElevatorsCount === 1 ? 'Elevador / Monta-Cargas' : `Elevador ${e}`,
+            level: whLevel++,
+            type: 'Circulação Vertical / Elevadores',
+          });
+        }
       }
     }
 
@@ -2029,14 +2213,8 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
         };
       });
 
-      const actualSubsolosCount = isPredioResidencial
-        ? subsolosCount
-        : isPredioComercialShopping
-        ? commercialSubsolos
-        : subsolosCount;
-
-      const hasBasements = actualSubsolosCount > 0;
-      const basementCount = actualSubsolosCount;
+      const basementCount = subsolosCount;
+      const hasBasements = basementCount > 0;
       const hasGround = finalFloors.some((f) => f.level === 0 || f.name.includes('Térreo'));
 
       if (workToEdit) {
@@ -2584,15 +2762,33 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
                         max={20}
                         onChange={setTechnicalAreaCount}
                       />
+                      <NumericField
+                        id="input-casa-escadas"
+                        label="Escadas"
+                        subtitle="Opcional (ex: sobrado com 1 escada)"
+                        value={houseStairsCount}
+                        min={0}
+                        max={10}
+                        onChange={setHouseStairsCount}
+                      />
+                      <NumericField
+                        id="input-casa-elevadores"
+                        label="Elevadores"
+                        subtitle="Opcional (ex: casa com elevador)"
+                        value={houseElevatorsCount}
+                        min={0}
+                        max={10}
+                        onChange={setHouseElevatorsCount}
+                      />
                     </div>
                   </div>
 
                   {/* Checkboxes */}
                   <div className="space-y-2 pt-2 border-t border-slate-800/80">
                     <span className="block text-xs font-bold text-slate-200">
-                      Áreas de Convivência e Instalações Comuns
+                      Áreas de Convivência e Lazer
                     </span>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                       <CheckboxField
                         id="check-casa-gourmet"
                         label="Área Gourmet"
@@ -2614,41 +2810,6 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
                         checked={hasHouseBackyardGarden}
                         onChange={setHasHouseBackyardGarden}
                       />
-                      <CheckboxField
-                        id="check-casa-poco-elevador"
-                        label="Poço de Elevador"
-                        subtitle="Caixa de corrida para elevadores e monta-cargas"
-                        checked={hasHouseElevatorShaft}
-                        onChange={setHasHouseElevatorShaft}
-                      />
-                      {isSobrado ? (
-                        <CheckboxField
-                          id="check-sobrado-escada"
-                          label="Escada"
-                          subtitle="Cômodo único opcional de acesso interno"
-                          checked={hasHouseStairs}
-                          onChange={setHasHouseStairs}
-                        />
-                      ) : (
-                        isVerticalBuilding && (
-                          <CheckboxField
-                            id="check-casa-escadas"
-                            label="Escadas"
-                            subtitle="Escadas de acesso e circulação"
-                            checked={hasBuildingStairs}
-                            onChange={setHasBuildingStairs}
-                          />
-                        )
-                      )}
-                      {isVerticalBuilding && (
-                        <CheckboxField
-                          id="check-casa-shaft"
-                          label="Shaft"
-                          subtitle="Shafts técnicos e prumadas"
-                          checked={hasBuildingShaft}
-                          onChange={setHasBuildingShaft}
-                        />
-                      )}
                     </div>
                   </div>
                 </div>
@@ -2661,12 +2822,21 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
                   --------------------------------------------------------------------- */}
               {(tipologia === 'Prédio Residencial' || isPredioResidencial) && (
                 <div className="space-y-4 animate-in fade-in duration-150">
-                  {/* Inputs Numéricos */}
+                  {/* Inputs Numéricos: Pavimentos e Torres */}
                   <div className="space-y-2">
                     <span className="block text-xs font-bold text-slate-200">
-                      Pavimentos e Apartamentos
+                      Pavimentos, Torres e Apartamentos
                     </span>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      <NumericField
+                        id="input-predio-torres"
+                        label="Quantidade de Torres"
+                        subtitle="Torre A, Torre B..."
+                        value={towersCount}
+                        min={1}
+                        max={10}
+                        onChange={setTowersCount}
+                      />
                       <NumericField
                         id="input-predio-subsolos"
                         label="Subsolos"
@@ -2706,84 +2876,259 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Seção Exigida: Cômodos por Apartamento */}
+                  {/* Seção: Áreas Comuns por Andar (Obras Verticais) */}
                   <div className="space-y-2 pt-2 border-t border-slate-800/80">
                     <span className="block text-xs font-bold text-slate-200">
-                      Cômodos por Apartamento
+                      Áreas Comuns por Andar (Pavimento Tipo)
                     </span>
-                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                      <RoomNumericField
-                        id="input-predio-quartos-apto"
-                        label="Quartos"
-                        subtitle="Dormitórios por apto"
-                        value={buildingBedroomsPerApt}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <NumericField
+                        id="input-predio-escadas-andar"
+                        label="Escadas"
+                        subtitle="Gera Escada 1..N por pavimento"
+                        value={floorStairsCount}
                         min={0}
                         max={10}
-                        onChange={setBuildingBedroomsPerApt}
+                        onChange={setFloorStairsCount}
                       />
-                      <RoomNumericField
-                        id="input-predio-suites-apto"
-                        label="Suítes"
-                        subtitle="Quartos com banheiro privativo"
-                        value={buildingSuitesPerApt}
+                      <NumericField
+                        id="input-predio-shafts-andar"
+                        label="Shafts"
+                        subtitle="Gera Shaft 1..N por pavimento"
+                        value={floorShaftsCount}
                         min={0}
                         max={10}
-                        onChange={setBuildingSuitesPerApt}
+                        onChange={setFloorShaftsCount}
                       />
-                      <RoomNumericField
-                        id="input-predio-salas-apto"
-                        label="Salas"
-                        subtitle="Salas de estar/jantar"
-                        value={buildingLivingRoomsPerApt}
+                      <NumericField
+                        id="input-predio-elevadores-andar"
+                        label="Elevadores Comuns"
+                        subtitle="Elevador Social/Serviço 1..N"
+                        value={floorElevatorsCount}
                         min={0}
                         max={10}
-                        onChange={setBuildingLivingRoomsPerApt}
+                        onChange={setFloorElevatorsCount}
                       />
-                      <RoomNumericField
-                        id="input-predio-cozinhas-apto"
-                        label="Cozinhas"
-                        subtitle="Cozinhas e copas"
-                        value={buildingKitchensPerApt}
-                        min={0}
-                        max={5}
-                        onChange={setBuildingKitchensPerApt}
-                      />
-                      <RoomNumericField
-                        id="input-predio-banheiros-apto"
-                        label="Banheiros"
-                        subtitle="Sanitários sociais"
-                        value={buildingBathroomsPerApt}
-                        min={0}
-                        max={10}
-                        onChange={setBuildingBathroomsPerApt}
-                      />
-                      <RoomNumericField
-                        id="input-predio-lavabos-apto"
-                        label="Lavabos"
-                        subtitle="Lavabos privativos"
-                        value={buildingLavabosPerApt}
-                        min={0}
-                        max={5}
-                        onChange={setBuildingLavabosPerApt}
-                      />
-                      <RoomNumericField
-                        id="input-predio-lavanderias-apto"
-                        label="Lavanderias"
-                        subtitle="Área de serviço"
-                        value={buildingLaundryPerApt}
-                        min={0}
-                        max={5}
-                        onChange={setBuildingLaundryPerApt}
-                      />
-                      <RoomNumericField
-                        id="input-predio-area-tecnica-apto"
-                        label="Área Técnica"
-                        subtitle="Área técnica do apto"
-                        value={technicalAreaCount}
-                        min={0}
-                        max={10}
-                        onChange={setTechnicalAreaCount}
-                      />
+                    </div>
+                  </div>
+
+                  {/* Seção Exigida: Múltiplas Plantas (Tipologias) e Cômodos */}
+                  <div className="space-y-3 pt-2 border-t border-slate-800/80">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <span className="block text-xs font-bold text-slate-200">
+                          Plantas e Tipologias dos Apartamentos
+                        </span>
+                        <p className="text-[11px] text-slate-400">
+                          Configure uma ou mais plantas no mesmo prédio e vincule quais finais de apartamento utilizam cada planta.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleAddFloorPlan}
+                        className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm shrink-0 self-start sm:self-auto"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Adicionar Planta</span>
+                      </button>
+                    </div>
+
+                    <div className="space-y-4">
+                      {buildingFloorPlans.map((plan, pIdx) => {
+                        return (
+                          <div
+                            key={plan.id}
+                            className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-3.5 shadow-md"
+                          >
+                            {/* Cabeçalho da Planta */}
+                            <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-800/70">
+                              <div className="flex items-center gap-2 flex-1 max-w-sm">
+                                <span className="text-xs font-black text-blue-400 font-mono">
+                                  #{pIdx + 1}
+                                </span>
+                                <input
+                                  type="text"
+                                  value={plan.name}
+                                  onChange={(e) => handleUpdateFloorPlan(plan.id, { name: e.target.value })}
+                                  placeholder="Nome da Planta (Ex: Planta 3 Quartos)"
+                                  className="w-full px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-xs font-bold text-white focus:outline-none focus:border-blue-500"
+                                />
+                              </div>
+                              {buildingFloorPlans.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveFloorPlan(plan.id)}
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+                                  title="Remover planta"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Vinculação de Finais de Apartamento */}
+                            <div className="space-y-1.5">
+                              <span className="block text-[11px] font-semibold text-slate-300">
+                                Finais de Apartamento que usam esta planta:
+                              </span>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {Array.from({ length: aptsPerFloor }, (_, i) => i + 1).map((finalNum) => {
+                                  const isSelected = plan.appliedAptFinals.includes(finalNum);
+                                  return (
+                                    <button
+                                      key={finalNum}
+                                      type="button"
+                                      onClick={() => handleToggleAptFinalInPlan(plan.id, finalNum)}
+                                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+                                        isSelected
+                                          ? 'bg-blue-600 border-blue-500 text-white shadow-sm'
+                                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-850'
+                                      }`}
+                                    >
+                                      Final {finalNum}
+                                    </button>
+                                  );
+                                })}
+                                {plan.appliedAptFinals.length === 0 && (
+                                  <span className="text-[11px] text-amber-400 italic">
+                                    (Padrão para finais não vinculados a outras plantas)
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Contadores de Cômodos da Planta (+ / -) */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 pt-1">
+                              <RoomNumericField
+                                id={`plan-${plan.id}-quartos`}
+                                label="Quartos"
+                                subtitle="Dormitórios padrão"
+                                value={plan.bedrooms}
+                                min={0}
+                                max={15}
+                                onChange={(val) => handleUpdateFloorPlan(plan.id, { bedrooms: val })}
+                              />
+                              <RoomNumericField
+                                id={`plan-${plan.id}-suites`}
+                                label="Suítes"
+                                subtitle="Quartos com banheiro privativo"
+                                value={plan.suites}
+                                min={0}
+                                max={10}
+                                onChange={(val) => handleUpdateFloorPlan(plan.id, { suites: val })}
+                              />
+                              <RoomNumericField
+                                id={`plan-${plan.id}-closets`}
+                                label="Closets"
+                                subtitle="Gerado dentro da Suíte/Quarto"
+                                value={plan.closets}
+                                min={0}
+                                max={10}
+                                onChange={(val) => handleUpdateFloorPlan(plan.id, { closets: val })}
+                              />
+                              <RoomNumericField
+                                id={`plan-${plan.id}-banheiros`}
+                                label="Banheiros Sociais"
+                                subtitle="Podendo ser 0"
+                                value={plan.bathrooms}
+                                min={0}
+                                max={10}
+                                onChange={(val) => handleUpdateFloorPlan(plan.id, { bathrooms: val })}
+                              />
+                              <RoomNumericField
+                                id={`plan-${plan.id}-lavabos`}
+                                label="Lavabos"
+                                subtitle="Lavabos privativos"
+                                value={plan.lavabos}
+                                min={0}
+                                max={5}
+                                onChange={(val) => handleUpdateFloorPlan(plan.id, { lavabos: val })}
+                              />
+                              <RoomNumericField
+                                id={`plan-${plan.id}-sacadas`}
+                                label="Sacadas"
+                                subtitle="Varandas (0, 1, 2...)"
+                                value={plan.balconies}
+                                min={0}
+                                max={5}
+                                onChange={(val) => handleUpdateFloorPlan(plan.id, { balconies: val })}
+                              />
+                              <RoomNumericField
+                                id={`plan-${plan.id}-depositos`}
+                                label="Depósitos"
+                                subtitle="Depósito privativo"
+                                value={plan.deposits}
+                                min={0}
+                                max={5}
+                                onChange={(val) => handleUpdateFloorPlan(plan.id, { deposits: val })}
+                              />
+                              <RoomNumericField
+                                id={`plan-${plan.id}-area-tecnica`}
+                                label="Área Técnica"
+                                subtitle="Técnica da unidade"
+                                value={plan.technicalArea}
+                                min={0}
+                                max={5}
+                                onChange={(val) => handleUpdateFloorPlan(plan.id, { technicalArea: val })}
+                              />
+                              <RoomNumericField
+                                id={`plan-${plan.id}-salas`}
+                                label="Salas"
+                                subtitle="Estar / Jantar"
+                                value={plan.livingRooms}
+                                min={0}
+                                max={5}
+                                onChange={(val) => handleUpdateFloorPlan(plan.id, { livingRooms: val })}
+                              />
+                              <RoomNumericField
+                                id={`plan-${plan.id}-cozinhas`}
+                                label="Cozinhas"
+                                subtitle="Cozinha e copa"
+                                value={plan.kitchens}
+                                min={0}
+                                max={5}
+                                onChange={(val) => handleUpdateFloorPlan(plan.id, { kitchens: val })}
+                              />
+                              <RoomNumericField
+                                id={`plan-${plan.id}-lavanderias`}
+                                label="Lavanderias"
+                                subtitle="Área de serviço"
+                                value={plan.laundry}
+                                min={0}
+                                max={5}
+                                onChange={(val) => handleUpdateFloorPlan(plan.id, { laundry: val })}
+                              />
+                            </div>
+
+                            {/* Opcionais da Planta: Elevador Privativo & Duplex */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-2 border-t border-slate-800/60">
+                              <CheckboxField
+                                id={`plan-${plan.id}-elevador-privativo`}
+                                label="Elevador Privativo"
+                                subtitle="Hall da Unidade exclusivo"
+                                checked={plan.hasPrivateElevator}
+                                onChange={(val) => handleUpdateFloorPlan(plan.id, { hasPrivateElevator: val })}
+                              />
+                              <CheckboxField
+                                id={`plan-${plan.id}-duplex`}
+                                label="Opção Duplex"
+                                subtitle="Unidade com mezanino duplex"
+                                checked={plan.isDuplex}
+                                onChange={(val) => handleUpdateFloorPlan(plan.id, { isDuplex: val })}
+                              />
+                              {plan.isDuplex && (
+                                <CheckboxField
+                                  id={`plan-${plan.id}-elevador-duplex`}
+                                  label="Elevador Exclusivo Duplex"
+                                  subtitle="Elevador interno exclusivo do duplex"
+                                  checked={plan.hasDuplexInternalElevator}
+                                  onChange={(val) => handleUpdateFloorPlan(plan.id, { hasDuplexInternalElevator: val })}
+                                />
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -2842,20 +3187,6 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
                         checked={hasUpperReservoir}
                         onChange={setHasUpperReservoir}
                       />
-                      <CheckboxField
-                        id="check-predio-escadas"
-                        label="Escadas"
-                        subtitle="Escadas de emergência nos pavimentos"
-                        checked={hasBuildingStairs}
-                        onChange={setHasBuildingStairs}
-                      />
-                      <CheckboxField
-                        id="check-predio-shaft"
-                        label="Shaft"
-                        subtitle="Shafts de instalações hidráulicas e elétricas"
-                        checked={hasBuildingShaft}
-                        onChange={setHasBuildingShaft}
-                      />
                     </div>
                   </div>
                 </div>
@@ -2900,6 +3231,24 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
                         min={0}
                         max={20}
                         onChange={setCondoSquaresCount}
+                      />
+                      <NumericField
+                        id="input-condo-escadas"
+                        label="Escadas"
+                        subtitle="Opcional (ex: desníveis ou áreas comuns)"
+                        value={condoStairsCount}
+                        min={0}
+                        max={20}
+                        onChange={setCondoStairsCount}
+                      />
+                      <NumericField
+                        id="input-condo-elevadores"
+                        label="Elevadores"
+                        subtitle="Opcional (ex: acessibilidade/clube)"
+                        value={condoElevatorsCount}
+                        min={0}
+                        max={10}
+                        onChange={setCondoElevatorsCount}
                       />
                     </div>
                   </div>
@@ -3055,31 +3404,6 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
                         checked={hasCondoEte}
                         onChange={setHasCondoEte}
                       />
-                      <CheckboxField
-                        id="check-condo-poco-elevador"
-                        label="Poço de Elevador"
-                        subtitle="Caixa de corrida para elevadores e monta-cargas"
-                        checked={hasCondoElevatorShaft}
-                        onChange={setHasCondoElevatorShaft}
-                      />
-                      {isVerticalBuilding && (
-                        <>
-                          <CheckboxField
-                            id="check-condo-escadas"
-                            label="Escadas"
-                            subtitle="Escadas de acesso e circulação"
-                            checked={hasBuildingStairs}
-                            onChange={setHasBuildingStairs}
-                          />
-                          <CheckboxField
-                            id="check-condo-shaft"
-                            label="Shaft"
-                            subtitle="Shafts técnicos de infraestrutura"
-                            checked={hasBuildingShaft}
-                            onChange={setHasBuildingShaft}
-                          />
-                        </>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -3412,6 +3736,24 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
                         max={20}
                         onChange={setTechnicalAreaCount}
                       />
+                      <NumericField
+                        id="input-galpao-escadas"
+                        label="Escadas"
+                        subtitle="Opcional (ex: mezanino ou docas)"
+                        value={warehouseStairsCount}
+                        min={0}
+                        max={20}
+                        onChange={setWarehouseStairsCount}
+                      />
+                      <NumericField
+                        id="input-galpao-elevadores"
+                        label="Elevadores / Monta-Cargas"
+                        subtitle="Opcional (ex: monta-cargas do mezanino)"
+                        value={warehouseElevatorsCount}
+                        min={0}
+                        max={10}
+                        onChange={setWarehouseElevatorsCount}
+                      />
                     </div>
                   </div>
 
@@ -3449,31 +3791,6 @@ export const AddWorkMapModal: React.FC<AddWorkMapModalProps> = ({
                         checked={hasWarehouseArmoredGate}
                         onChange={setHasWarehouseArmoredGate}
                       />
-                      <CheckboxField
-                        id="check-galpao-poco-elevador"
-                        label="Poço de Elevador"
-                        subtitle="Caixa de corrida para elevadores e monta-cargas"
-                        checked={hasWarehouseElevatorShaft}
-                        onChange={setHasWarehouseElevatorShaft}
-                      />
-                      {isVerticalBuilding && (
-                        <>
-                          <CheckboxField
-                            id="check-galpao-escadas"
-                            label="Escadas"
-                            subtitle="Escadas de acesso ao mezanino"
-                            checked={hasBuildingStairs}
-                            onChange={setHasBuildingStairs}
-                          />
-                          <CheckboxField
-                            id="check-galpao-shaft"
-                            label="Shaft"
-                            subtitle="Shafts e galerias de instalações industriais"
-                            checked={hasBuildingShaft}
-                            onChange={setHasBuildingShaft}
-                          />
-                        </>
-                      )}
                     </div>
                   </div>
                 </div>

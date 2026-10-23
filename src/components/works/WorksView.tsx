@@ -58,6 +58,7 @@ interface TreeNodeProps {
   onEdit?: (fullPath: string) => void;
   onDelete?: (fullPath: string) => void;
   onApontarServico?: (fullPath: string) => void;
+  warningChecker?: (fullPath: string) => boolean;
 }
 
 const TreeNode: React.FC<TreeNodeProps> = ({
@@ -72,13 +73,16 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   onEdit,
   onDelete,
   onApontarServico,
+  warningChecker,
 }) => {
+  const hasWarning = warningChecker ? warningChecker(fullPath) : false;
+
   // SE tiver filhos (children !== null): Renderize OBRIGATORIAMENTE a tag HTML <details className="ml-4 mt-2 border-l border-slate-700 pl-4"> (sem open para iniciar fechada)
   if (children !== null) {
     return (
       <details className="ml-4 mt-2 border-l border-slate-700 pl-4">
         <summary className="cursor-pointer font-semibold py-2 text-white hover:text-blue-400 select-none flex items-center justify-between pr-2">
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-2 min-w-0 flex-wrap">
             {isRoot && (
               <div
                 className="flex items-center gap-1 shrink-0"
@@ -124,6 +128,11 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               </div>
             )}
             <span className="truncate">{name}</span>
+            {hasWarning && (
+              <span className="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-400 text-[10px] font-bold shrink-0 flex items-center gap-1 shadow-sm animate-pulse" title="Fechamento com instalações pendentes">
+                ⚠️ Fechamento com instalações pendentes
+              </span>
+            )}
           </div>
           <button
             type="button"
@@ -146,6 +155,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
             onEdit={onEdit}
             onDelete={onDelete}
             onApontarServico={onApontarServico}
+            warningChecker={warningChecker}
           />
         ))}
       </details>
@@ -155,7 +165,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   // SE NÃO tiver filhos (Leaf Node): NÃO USE GRID. Renderize uma div simples em linha:
   return (
     <div className="flex justify-between items-center ml-4 p-2 border-b border-slate-800">
-      <div className="flex items-center gap-2 min-w-0">
+      <div className="flex items-center gap-2 min-w-0 flex-wrap">
         {isRoot && (
           <div className="flex items-center gap-1 shrink-0">
             <button
@@ -187,6 +197,11 @@ const TreeNode: React.FC<TreeNodeProps> = ({
           </div>
         )}
         <span className="text-xs sm:text-sm text-slate-200 truncate">{name}</span>
+        {hasWarning && (
+          <span className="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-400 text-[10px] font-bold shrink-0 flex items-center gap-1 shadow-sm animate-pulse" title="Fechamento com instalações pendentes">
+            ⚠️ Fechamento com instalações pendentes
+          </span>
+        )}
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
         <button
@@ -237,6 +252,7 @@ export const WorksView: React.FC = () => {
     occurrences,
     alerts,
     createService,
+    editService,
     updateServiceLocationStatus,
     hasPermission,
     requestConfirmation,
@@ -254,6 +270,7 @@ export const WorksView: React.FC = () => {
   const [selectedDetailWork, setSelectedDetailWork] = useState<Work | null>(null);
   const [dashboardWork, setDashboardWork] = useState<Work | null>(null);
   const [apontamentoLocation, setApontamentoLocation] = useState<string | null>(null);
+  const [replicateFloor, setReplicateFloor] = useState<boolean>(false);
 
   // Floor modal states
   const [isAddFloorModalOpen, setIsAddFloorModalOpen] = useState(false);
@@ -391,21 +408,371 @@ export const WorksView: React.FC = () => {
     setIsAddFloorModalOpen(false);
   };
 
-  const handleMoveFloor = (floorIndex: number, direction: 'up' | 'down') => {
-    if (!activeDetailWork) return;
-    const targetIndex = direction === 'up' ? floorIndex - 1 : floorIndex + 1;
-    if (targetIndex < 0 || targetIndex >= activeDetailWork.floors.length) return;
+  // Dados de Mão de Obra, Profissional Responsável, Ajudantes e Motivo de Parada por Serviço e Local
+  const [serviceLaborMap, setServiceLaborMap] = useState<
+    Record<
+      string,
+      {
+        laborType: 'propria' | 'terceirizada';
+        contractorName: string;
+        responsibleName: string;
+        helpers: string[];
+        stopReason?: string;
+      }
+    >
+  >({});
 
-    const newFloors = [...activeDetailWork.floors];
-    const temp = newFloors[floorIndex];
-    newFloors[floorIndex] = newFloors[targetIndex];
-    newFloors[targetIndex] = temp;
+  const updateLabor = (
+    srvCode: string,
+    locPath: string,
+    data: Partial<{
+      laborType: 'propria' | 'terceirizada';
+      contractorName: string;
+      responsibleName: string;
+      stopReason?: string;
+    }>
+  ) => {
+    const key = `${srvCode}_${locPath}`;
+    setServiceLaborMap((prev) => {
+      const current = prev[key] || {
+        laborType: 'propria',
+        contractorName: '',
+        responsibleName: '',
+        helpers: [],
+      };
+      return {
+        ...prev,
+        [key]: {
+          ...current,
+          ...data,
+        },
+      };
+    });
+  };
 
-    reorderFloors(
-      activeDetailWork.id,
-      newFloors.map((f) => f.id)
+  const addHelper = (srvCode: string, locPath: string) => {
+    const key = `${srvCode}_${locPath}`;
+    setServiceLaborMap((prev) => {
+      const current = prev[key] || {
+        laborType: 'propria',
+        contractorName: '',
+        responsibleName: '',
+        helpers: [],
+      };
+      return {
+        ...prev,
+        [key]: {
+          ...current,
+          helpers: [...current.helpers, ''],
+        },
+      };
+    });
+  };
+
+  const updateHelper = (srvCode: string, locPath: string, index: number, value: string) => {
+    const key = `${srvCode}_${locPath}`;
+    setServiceLaborMap((prev) => {
+      const current = prev[key] || {
+        laborType: 'propria',
+        contractorName: '',
+        responsibleName: '',
+        helpers: [],
+      };
+      const updated = [...current.helpers];
+      updated[index] = value;
+      return {
+        ...prev,
+        [key]: {
+          ...current,
+          helpers: updated,
+        },
+      };
+    });
+  };
+
+  const removeHelper = (srvCode: string, locPath: string, index: number) => {
+    const key = `${srvCode}_${locPath}`;
+    setServiceLaborMap((prev) => {
+      const current = prev[key] || {
+        laborType: 'propria',
+        contractorName: '',
+        responsibleName: '',
+        helpers: [],
+      };
+      return {
+        ...prev,
+        [key]: {
+          ...current,
+          helpers: current.helpers.filter((_, i) => i !== index),
+        },
+      };
+    });
+  };
+
+  // Precedência construtiva: Identifica se é serviço de fechamento/acabamento (Reboco, Gesso, Forro ou Pintura)
+  const isFechamentoService = (name: string, cat?: string, subCat?: string): boolean => {
+    const text = `${name} ${cat || ''} ${subCat || ''}`.toLowerCase();
+    return (
+      text.includes('reboco') ||
+      text.includes('gesso') ||
+      text.includes('forro') ||
+      text.includes('pintura') ||
+      text.includes('emboço') ||
+      text.includes('emboco') ||
+      text.includes('drywall') ||
+      text.includes('massa corrida')
     );
   };
+
+  // Precedência construtiva: Verifica se as instalações (Elétrica e Hidráulica) estão 100% finalizadas no local
+  const isInstallationsPendingAtLocation = (locationPath: string, workId: string): boolean => {
+    const workServices = services.filter((s) => s.workId === workId);
+
+    // Serviços de instalações elétricas ou hidráulicas
+    const instServices = workServices.filter((s) => {
+      const text = `${s.categoryName || ''} ${s.area || ''} ${s.name}`.toLowerCase();
+      return (
+        text.includes('elétric') ||
+        text.includes('eletric') ||
+        text.includes('hidráulic') ||
+        text.includes('hidraulic')
+      );
+    });
+
+    if (instServices.length === 0) {
+      // Nenhuma instalação foi cadastrada/finalizada ainda neste local
+      return true;
+    }
+
+    // Status de cada instalação relevante no local
+    const relevantStatuses = instServices.map((s) => {
+      const lp = (s.locationProgress || []).find(
+        (l) => l.locationName === locationPath || l.locationId === locationPath || locationPath.endsWith(l.locationName)
+      );
+      return lp ? lp.status : s.status;
+    });
+
+    return relevantStatuses.some((st) => st !== 'Concluído' && st !== 'Finalizado');
+  };
+
+  // Precedência construtiva: Verificador para exibição do badge amarelo na árvore
+  const checkLocationPrecedenceWarning = (locPath: string): boolean => {
+    if (!activeDetailWork) return false;
+    const workServices = services.filter((s) => s.workId === activeDetailWork.id);
+
+    return workServices.some((s) => {
+      const isFech = isFechamentoService(s.name, s.categoryName, s.area);
+      if (!isFech) return false;
+
+      return (s.locationProgress || []).some((lp) => {
+        const matchesLoc =
+          lp.locationName === locPath ||
+          lp.locationName.startsWith(locPath + ' - ') ||
+          locPath.startsWith(lp.locationName);
+        if (!matchesLoc) return false;
+        const isFin = lp.status === 'Concluído' || lp.status === 'Finalizado';
+        if (!isFin) return false;
+
+        return isInstallationsPendingAtLocation(lp.locationName, activeDetailWork.id);
+      });
+    });
+  };
+
+  // Lista oficial das 15 Disciplinas na sequência exata de obra
+  const modalDisciplines = useMemo(() => {
+    const allServices = MASTER_DISCIPLINES.flatMap((d) => d.services);
+
+    const definitions = [
+      { id: 'preliminares', order: 1, name: '1. Preliminares', icon: '🚜', technicalName: '1. Preliminares 🚜' },
+      { id: 'fundacoes', order: 2, name: '2. Fundações', icon: '🏗️', technicalName: '2. Fundações 🏗️' },
+      { id: 'estrutura', order: 3, name: '3. Estrutura', icon: '🏗️', technicalName: '3. Estrutura 🏗️' },
+      { id: 'alvenaria', order: 4, name: '4. Alvenaria', icon: '🧱', technicalName: '4. Alvenaria 🧱' },
+      { id: 'cobertura', order: 5, name: '5. Cobertura', icon: '🏠', technicalName: '5. Cobertura 🏠' },
+      { id: 'eletrica', order: 6, name: '6. Elétrica', icon: '⚡', technicalName: '6. Elétrica ⚡' },
+      { id: 'hidraulica', order: 7, name: '7. Hidráulica', icon: '💧', technicalName: '7. Hidráulica 💧' },
+      { id: 'gas', order: 8, name: '8. Gás', icon: '🔥', technicalName: '8. Gás 🔥' },
+      { id: 'incendio', order: 9, name: '9. Incêndio', icon: '🧯', technicalName: '9. Incêndio 🧯' },
+      { id: 'climatizacao', order: 10, name: '10. Climatização', icon: '❄️', technicalName: '10. Climatização ❄️' },
+      { id: 'revestimentos', order: 11, name: '11. Revestimentos', icon: '🛠️', technicalName: '11. Revestimentos 🛠️' },
+      { id: 'esquadrias', order: 12, name: '12. Esquadrias', icon: '🚪', technicalName: '12. Esquadrias 🚪' },
+      { id: 'pisos_loucas', order: 13, name: '13. Pisos/Louças', icon: '🚽', technicalName: '13. Pisos/Louças 🚽' },
+      { id: 'pintura', order: 14, name: '14. Pintura', icon: '🎨', technicalName: '14. Pintura 🎨' },
+      { id: 'limpeza', order: 15, name: '15. Limpeza', icon: '✨', technicalName: '15. Limpeza ✨' },
+    ];
+
+    return definitions.map((disc) => {
+      let matchedServices = allServices.filter((srv) => {
+        const meta = getDisciplineMeta(srv.name || srv.subCategoryName || '');
+        if (disc.order === 1) return meta.order === 1;
+        if (disc.order === 2) return meta.order === 2;
+        if (disc.order === 3) return meta.order === 3;
+        if (disc.order === 4) return meta.order === 4 && !srv.name.toLowerCase().includes('cobertura') && !srv.name.toLowerCase().includes('esquadria');
+        if (disc.order === 5) return meta.order === 5 || srv.name.toLowerCase().includes('cobertura') || srv.name.toLowerCase().includes('impermeabiliz');
+        if (disc.order === 6) return meta.order === 6;
+        if (disc.order === 7) return meta.order === 7;
+        if (disc.order === 8) return meta.order === 8;
+        if (disc.order === 9) return meta.order === 9;
+        if (disc.order === 10) return meta.order === 10;
+        if (disc.order === 11) return (meta.order === 11 || srv.name.toLowerCase().includes('reboco') || srv.name.toLowerCase().includes('gesso')) && !srv.name.toLowerCase().includes('pintura') && !srv.name.toLowerCase().includes('piso');
+        if (disc.order === 12) return meta.order === 12 || srv.name.toLowerCase().includes('esquadria') || srv.name.toLowerCase().includes('vidro') || srv.name.toLowerCase().includes('marcenaria');
+        if (disc.order === 13) return meta.order === 13 || srv.name.toLowerCase().includes('piso') || srv.name.toLowerCase().includes('louça') || srv.name.toLowerCase().includes('bancada');
+        if (disc.order === 14) return meta.order === 14 || srv.name.toLowerCase().includes('pintura') || srv.name.toLowerCase().includes('massa');
+        if (disc.order === 15) return meta.order >= 15 || meta.order === 99;
+        return false;
+      });
+
+      if (matchedServices.length === 0) {
+        if (disc.order === 5) {
+          matchedServices = [
+            {
+              id: 'srv-disc-05-01',
+              code: '05.01.001',
+              name: 'Impermeabilização de laje de cobertura com manta asfáltica',
+              order: 1,
+              categoryCode: '05',
+              categoryName: 'Cobertura',
+              subCategoryName: 'Impermeabilização e Coberturas',
+              defaultResponsible: 'Impermeabilizador / Oficial',
+              defaultEstimatedDays: 5,
+              description: 'Execução de caimento, imprimação e colagem de manta asfáltica',
+              checklist: ['Teste de estanqueidade 72h', 'Proteção mecânica'],
+            },
+            {
+              id: 'srv-disc-05-02',
+              code: '05.01.002',
+              name: 'Instalação de estrutura de cobertura, telhas e calhas pluviais',
+              order: 2,
+              categoryCode: '05',
+              categoryName: 'Cobertura',
+              subCategoryName: 'Impermeabilização e Coberturas',
+              defaultResponsible: 'Montador / Telhadista',
+              defaultEstimatedDays: 6,
+              description: 'Montagem de tesouras, perfis, fixação de telhas e rufos metálicos',
+              checklist: ['Caimento para calhas', 'Vedação de rufos com selante PU'],
+            },
+          ];
+        } else if (disc.order === 12) {
+          matchedServices = [
+            {
+              id: 'srv-disc-12-01',
+              code: '12.01.001',
+              name: 'Fixação e chumbamento de contramarcos e caixilhos de alumínio',
+              order: 1,
+              categoryCode: '12',
+              categoryName: 'Esquadrias',
+              subCategoryName: 'Esquadrias e Vidros',
+              defaultResponsible: 'Serralheiro / Montador',
+              defaultEstimatedDays: 3,
+              description: 'Posicionamento a laser, fixação com grapas e argamassa de encunhamento',
+              checklist: ['Prumo e esquadro', 'Nivelamento dos vãos'],
+            },
+            {
+              id: 'srv-disc-12-02',
+              code: '12.01.002',
+              name: 'Instalação de portas de madeira, batentes, fechaduras e guarnições',
+              order: 2,
+              categoryCode: '12',
+              categoryName: 'Esquadrias',
+              subCategoryName: 'Marcenaria',
+              defaultResponsible: 'Marceneiro / Carpinteiro',
+              defaultEstimatedDays: 4,
+              description: 'Instalação com espuma expansiva, dobradiças reforçadas e fechaduras',
+              checklist: ['Ajuste da folha de porta', 'Travamento e chaves'],
+            },
+            {
+              id: 'srv-disc-12-03',
+              code: '12.01.003',
+              name: 'Instalação de vidros temperados, laminados e guarda-corpos',
+              order: 3,
+              categoryCode: '12',
+              categoryName: 'Esquadrias',
+              subCategoryName: 'Vidraçaria',
+              defaultResponsible: 'Vidraceiro Especialista',
+              defaultEstimatedDays: 3,
+              description: 'Montagem de painéis de vidro, colagem estrutural e fixação mecânica',
+              checklist: ['Norma de guarda-corpo NBR 14718', 'Espessura e película'],
+            },
+          ];
+        } else if (disc.order === 13) {
+          matchedServices = [
+            {
+              id: 'srv-disc-13-01',
+              code: '13.01.001',
+              name: 'Assentamento de pisos porcelanatos, cerâmicas e rodapés',
+              order: 1,
+              categoryCode: '13',
+              categoryName: 'Pisos e Louças',
+              subCategoryName: 'Pisos e Revestimentos Nobres',
+              defaultResponsible: 'Azulejista / Ladrilhista',
+              defaultEstimatedDays: 5,
+              description: 'Dupla colagem de argamassa AC-III, niveladores e rejunte resinado',
+              checklist: ['Alinhamento das juntas', 'Caimento dos ralos mínimo 1%'],
+            },
+            {
+              id: 'srv-disc-13-02',
+              code: '13.01.002',
+              name: 'Instalação de bancadas de granito, cubas e tampos em pedra',
+              order: 2,
+              categoryCode: '13',
+              categoryName: 'Pisos e Louças',
+              subCategoryName: 'Marmoraria',
+              defaultResponsible: 'Marmorista / Instalador',
+              defaultEstimatedDays: 2,
+              description: 'Chumbamento de mãos francesas em aço, colagem e calafetação',
+              checklist: ['Nível e esquadro', 'Vedação perimetral contra infiltração'],
+            },
+            {
+              id: 'srv-disc-13-03',
+              code: '13.01.003',
+              name: 'Fixação de louças sanitárias, bacias, caixas acopladas e metais de acabamento',
+              order: 3,
+              categoryCode: '13',
+              categoryName: 'Pisos e Louças',
+              subCategoryName: 'Louças e Metais',
+              defaultResponsible: 'Bombeiro Hidráulico / Instalador',
+              defaultEstimatedDays: 2,
+              description: 'Fixação com parafusos de inox, anel de vedação e ligação flexível',
+              checklist: ['Teste de descarga e estanqueidade', 'Instalação de torneiras e registros'],
+            },
+          ];
+        } else if (disc.order === 14) {
+          matchedServices = [
+            {
+              id: 'srv-disc-14-01',
+              code: '14.01.001',
+              name: 'Aplicação de selador acrílico e emassamento com massa corrida / acrílica',
+              order: 1,
+              categoryCode: '14',
+              categoryName: 'Pintura',
+              subCategoryName: 'Pinturas e Acabamentos',
+              defaultResponsible: 'Pintor Oficial',
+              defaultEstimatedDays: 4,
+              description: 'Fundo preparador, duas demãos cruzadas de massa e lixamento mecanizado',
+              checklist: ['Planicidade com luz rasante', 'Aspiração de pó'],
+            },
+            {
+              id: 'srv-disc-14-02',
+              code: '14.01.002',
+              name: 'Pintura látex/acrílica fosca, acetinada e pintura de tetos e molduras',
+              order: 2,
+              categoryCode: '14',
+              categoryName: 'Pintura',
+              subCategoryName: 'Pinturas e Acabamentos',
+              defaultResponsible: 'Pintor Oficial',
+              defaultEstimatedDays: 3,
+              description: 'Aplicação com rolo de microfibra, recorte fino em cantos e demãos necessárias',
+              checklist: ['Cobertura uniforme sem manchas', 'Proteção de pisos e esquadrias com lona'],
+            },
+          ];
+        }
+      }
+
+      return {
+        ...disc,
+        services: matchedServices,
+      };
+    });
+  }, []);
 
   const getServiceStatusAtLocation = (srv: EAPServiceTemplate, locationPath: string): LocationServiceStatus => {
     if (!activeDetailWork) return 'Não iniciado';
@@ -441,9 +808,96 @@ export const WorksView: React.FC = () => {
         (s.eapServiceCode === srv.code || s.name.toLowerCase() === srv.name.toLowerCase())
     );
 
+    const laborKey = `${srv.code}_${locationPath}`;
+    const defaultResp = existingService?.responsibleName || srv.defaultResponsible || 'Engenheiro Residente';
+    const laborData = serviceLaborMap[laborKey] || {
+      laborType: existingService?.assignedEmployees?.some((e) => e.isOutsourced) ? 'terceirizada' : 'propria',
+      contractorName: existingService?.assignedEmployees?.find((e) => e.companyName)?.companyName || '',
+      responsibleName: defaultResp,
+      helpers: (existingService?.assignedEmployees || [])
+        .filter((e) => e.name !== defaultResp)
+        .map((e) => e.name),
+    };
+
+    const isFechamento = isFechamentoService(srv.name, srv.categoryName, srv.subCategoryName);
+    const isFinished = newStatus === 'Concluído' || newStatus === 'Finalizado';
+    const isPendingInst = isInstallationsPendingAtLocation(locationPath, activeDetailWork.id);
+
+    const assignedEmps = [
+      ...(laborData.responsibleName.trim()
+        ? [
+            {
+              id: `resp-${Date.now()}`,
+              name: laborData.responsibleName.trim(),
+              isOutsourced: laborData.laborType === 'terceirizada',
+              companyName: laborData.laborType === 'terceirizada' ? laborData.contractorName.trim() : undefined,
+            },
+          ]
+        : []),
+      ...laborData.helpers
+        .filter((h) => h.trim())
+        .map((h, i) => ({
+          id: `helper-${Date.now()}-${i}`,
+          name: h.trim(),
+          isOutsourced: laborData.laborType === 'terceirizada',
+          companyName: laborData.laborType === 'terceirizada' ? laborData.contractorName.trim() : undefined,
+        })),
+    ];
+
+    // Se checkbox 'Replicar no pavimento' estiver marcado, busca ambientes equivalentes
+    let equivalentFloors: Floor[] = [];
+    if (replicateFloor && activeDetailWork.floors) {
+      const parts = locationPath.split(' - ');
+      if (parts.length >= 3) {
+        // Ex: 1º Pavimento - Apto 101 - Suíte 1 -> prefix: 1º Pavimento, suffix: Suíte 1
+        const floorPrefix = parts.slice(0, parts.length - 2).join(' - ');
+        const roomSuffix = parts[parts.length - 1];
+        equivalentFloors = activeDetailWork.floors.filter(
+          (f) => f.name !== locationPath && f.name.startsWith(floorPrefix + ' - ') && f.name.endsWith(' - ' + roomSuffix)
+        );
+      } else if (parts.length === 2) {
+        // Ex: 1º Pavimento - Suíte 1
+        const floorPrefix = parts[0];
+        const roomSuffix = parts[1];
+        equivalentFloors = activeDetailWork.floors.filter(
+          (f) => f.name !== locationPath && f.name.startsWith(floorPrefix + ' - ') && f.name.endsWith(roomSuffix)
+        );
+      }
+    }
+
+    // Replicar mão de obra no serviceLaborMap
+    if (equivalentFloors.length > 0) {
+      setServiceLaborMap((prev) => {
+        const next = { ...prev };
+        equivalentFloors.forEach((ef) => {
+          const eqKey = `${srv.code}_${ef.name}`;
+          next[eqKey] = {
+            ...laborData,
+          };
+        });
+        return next;
+      });
+    }
+
     if (existingService) {
       updateServiceLocationStatus(existingService.id, locationId, locationPath, newStatus);
+      if (equivalentFloors.length > 0) {
+        equivalentFloors.forEach((ef) => {
+          updateServiceLocationStatus(existingService.id, ef.id, ef.name, newStatus);
+        });
+      }
+      editService(existingService.id, {
+        responsibleName: laborData.responsibleName.trim() || defaultResp,
+        assignedEmployees: assignedEmps,
+      });
     } else {
+      const eqLocProgress = equivalentFloors.map((ef) => ({
+        locationId: ef.id,
+        locationName: ef.name,
+        status: newStatus,
+        updatedAt: new Date().toISOString(),
+      }));
+
       createService({
         workId: activeDetailWork.id,
         floorId: locationId,
@@ -451,14 +905,14 @@ export const WorksView: React.FC = () => {
         name: srv.name,
         area: srv.subCategoryName || 'Obra Geral',
         status: newStatus,
-        responsibleName: srv.defaultResponsible || 'Engenheiro Residente',
+        responsibleName: laborData.responsibleName.trim() || defaultResp,
         startDate: new Date().toISOString().substring(0, 10),
         predictedEndDate: new Date(Date.now() + 5 * 86400000).toISOString().substring(0, 10),
         eapServiceCode: srv.code,
         categoryCode: srv.categoryCode,
         categoryName: srv.categoryName,
         checklist: srv.checklist || [],
-        assignedEmployees: [],
+        assignedEmployees: assignedEmps,
         locationProgress: [
           {
             locationId,
@@ -466,16 +920,25 @@ export const WorksView: React.FC = () => {
             status: newStatus,
             updatedAt: new Date().toISOString(),
           },
+          ...eqLocProgress,
         ],
         proofPhotos: [],
       });
     }
 
-    showToast({
-      type: 'success',
-      title: 'Status Atualizado',
-      message: `${srv.name}: marcado como "${newStatus}" em "${locationPath}".`,
-    });
+    if (isFechamento && isFinished && isPendingInst) {
+      showToast({
+        type: 'warning',
+        title: '⚠️ Precedência Construtiva',
+        message: `Fechamento com instalações pendentes: serviço salvo normalmente${equivalentFloors.length > 0 ? ` (replicado em ${equivalentFloors.length} ambiente(s))` : ''}, porém Elétrica ou Hidráulica ainda não estão 100% finalizadas neste local.`,
+      });
+    } else {
+      showToast({
+        type: 'success',
+        title: 'Status Atualizado',
+        message: `${srv.name}: marcado como "${newStatus}" em "${locationPath}"${equivalentFloors.length > 0 ? ` e replicado em ${equivalentFloors.length} ambientes equivalentes deste pavimento.` : '.'}`,
+      });
+    }
   };
 
   // Estrutura em Árvore Hierárquica construída via buildTree
@@ -542,6 +1005,7 @@ export const WorksView: React.FC = () => {
         totalIssues: 0,
         occurrencesCount: 0,
         alertsCount: 0,
+        precedenceAlertsCount: 0,
         disciplineProgressList: [] as {
           discipline: typeof MASTER_DISCIPLINES[0];
           order: number;
@@ -635,6 +1099,21 @@ export const WorksView: React.FC = () => {
       ? Math.round(disciplineProgressList.reduce((acc, d) => acc + d.progress, 0) / activeDisciplinesCount)
       : 0;
 
+    // Alertas de precedência construtiva (Fechamentos finalizados com instalações pendentes)
+    let precedenceAlertsCount = 0;
+    floors.forEach((fl) => {
+      const hasWarning = workServices.some((s) => {
+        const isFech = isFechamentoService(s.name, s.categoryName, s.area);
+        if (!isFech) return false;
+        const lp = (s.locationProgress || []).find(
+          (l) => l.locationName === fl.name || l.locationId === fl.id || fl.name.endsWith(l.locationName)
+        );
+        const isFin = (lp ? lp.status : s.status) === 'Concluído' || (lp ? lp.status : s.status) === 'Finalizado';
+        return isFin && isInstallationsPendingAtLocation(fl.name, dashboardWork.id);
+      });
+      if (hasWarning) precedenceAlertsCount++;
+    });
+
     return {
       overallProgress,
       completedEnvironments,
@@ -642,9 +1121,57 @@ export const WorksView: React.FC = () => {
       totalIssues,
       occurrencesCount: workOccurrences.length,
       alertsCount: workAlerts.length,
+      precedenceAlertsCount,
       disciplineProgressList,
     };
   }, [dashboardWork, services, occurrences, alerts]);
+
+  // Copiar Resumo Executivo para WhatsApp
+  const handleCopyWhatsAppSummary = async () => {
+    if (!dashboardWork) return;
+
+    const activeDisciplines = dashboardStats.disciplineProgressList.filter((d) => d.progress > 0);
+
+    const disciplinesLines = activeDisciplines.length > 0
+      ? activeDisciplines
+          .map((d) => `${d.icon} *${d.discipline.technicalName}:* ${d.progress}%`)
+          .join('\n')
+      : 'Nenhuma disciplina com avanço registrado ainda.';
+
+    const text = [
+      `🏗️ *RELATÓRIO EXECUTIVO - ${dashboardWork.name}*`,
+      `📊 *Progresso Geral:* ${dashboardStats.overallProgress}% (${dashboardStats.completedEnvironments}/${dashboardStats.totalEnvironments} ambientes)`,
+      `⚠️ *Alertas de Precedência:* ${dashboardStats.precedenceAlertsCount}`,
+      `--- *Avanço por Disciplina* ---`,
+      disciplinesLines,
+    ].join('\n');
+
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      showToast({
+        type: 'success',
+        title: 'WhatsApp',
+        message: 'Resumo copiado para o WhatsApp!',
+      });
+    } catch {
+      showToast({
+        type: 'error',
+        title: 'Erro ao copiar',
+        message: 'Não foi possível copiar o texto automaticamente.',
+      });
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -792,7 +1319,9 @@ export const WorksView: React.FC = () => {
                   </div>
                   <div className="flex flex-wrap gap-1 text-[11px] text-slate-300">
                     {(() => {
-                      const realSubsolosCount = work.floors ? Array.from(new Set(work.floors.map(f => f.name.split(' - ')[0]))).filter(r => r.toLowerCase().startsWith('subsolo')).length : work.basementCount;
+                      const realSubsolosCount = (work.floors && work.floors.length > 0)
+                        ? Array.from(new Set(work.floors.map(f => f.name.split(' - ')[0]))).filter(r => r.toLowerCase().startsWith('subsolo')).length
+                        : (work.basementCount || 0);
                       return realSubsolosCount > 0 ? (
                         <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px]">
                           {realSubsolosCount} subsolos
@@ -967,7 +1496,9 @@ export const WorksView: React.FC = () => {
                 <span className="text-[10px] text-slate-500 uppercase font-bold block">Subsolos</span>
                 <span className="text-xs font-bold text-white">
                   {(() => {
-                    const realSubsolosCount = activeDetailWork.floors ? Array.from(new Set(activeDetailWork.floors.map(f => f.name.split(' - ')[0]))).filter(r => r.toLowerCase().startsWith('subsolo')).length : activeDetailWork.basementCount;
+                    const realSubsolosCount = (activeDetailWork.floors && activeDetailWork.floors.length > 0)
+                      ? Array.from(new Set(activeDetailWork.floors.map(f => f.name.split(' - ')[0]))).filter(r => r.toLowerCase().startsWith('subsolo')).length
+                      : (activeDetailWork.basementCount || 0);
                     return realSubsolosCount > 0 ? `${realSubsolosCount} subsolos` : 'Nenhum';
                   })()}
                 </span>
@@ -1072,6 +1603,7 @@ export const WorksView: React.FC = () => {
                       onApontarServico={(path) => {
                         setApontamentoLocation(path);
                       }}
+                      warningChecker={(path) => checkLocationPrecedenceWarning(path)}
                     />
                   ))
                 )}
@@ -1115,70 +1647,253 @@ export const WorksView: React.FC = () => {
               </button>
             </div>
 
-            {/* Disciplinas em <details> fechados */}
-            <div className="p-4 sm:p-5 overflow-y-auto space-y-3 flex-1">
-              {[...MASTER_DISCIPLINES]
-                .sort((a, b) => getDisciplineMeta(a).order - getDisciplineMeta(b).order)
-                .map((discipline) => (
-                  <details
-                    key={discipline.id}
-                    className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950/60 transition-all"
-                  >
-                    <summary className="p-3 bg-slate-900 hover:bg-slate-800/80 cursor-pointer select-none font-bold text-xs sm:text-sm text-white flex items-center justify-between border-b border-slate-800/40">
-                      <div className="flex items-center gap-2">
-                        <span>{getDisciplineMeta(discipline).icon}</span>
-                        <span>{discipline.technicalName}</span>
-                      </div>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">
-                        {discipline.services.length} serviços
-                      </span>
-                    </summary>
+            {/* Checkbox: Replicar apontamentos para unidades/ambientes equivalentes deste pavimento */}
+            <div className="px-4 sm:px-5 py-2.5 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between">
+              <label className="flex items-center gap-2 text-xs font-semibold text-slate-300 hover:text-white cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={replicateFloor}
+                  onChange={(e) => setReplicateFloor(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-blue-600 focus:ring-blue-500 accent-blue-500 cursor-pointer"
+                />
+                <span>🔄 Replicar apontamentos para unidades/ambientes equivalentes deste pavimento</span>
+              </label>
+            </div>
 
-                  <div className="p-3 space-y-2.5 bg-slate-950/30">
+            {/* Disciplinas em <details> fechados (Sequência Construtiva 1 a 15) */}
+            <div className="p-4 sm:p-5 overflow-y-auto space-y-3 flex-1">
+              {modalDisciplines.map((discipline) => (
+                <details
+                  key={discipline.id}
+                  className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950/60 transition-all"
+                >
+                  <summary className="p-3 bg-slate-900 hover:bg-slate-800/80 cursor-pointer select-none font-bold text-xs sm:text-sm text-white flex items-center justify-between border-b border-slate-800/40">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">{discipline.icon}</span>
+                      <span>{discipline.technicalName}</span>
+                    </div>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">
+                      {discipline.services.length} {discipline.services.length === 1 ? 'serviço' : 'serviços'}
+                    </span>
+                  </summary>
+
+                  <div className="p-3 space-y-3 bg-slate-950/30">
                     {discipline.services.map((srv) => {
                       const currentStatus = getServiceStatusAtLocation(srv, apontamentoLocation);
+                      const laborKey = `${srv.code}_${apontamentoLocation}`;
+                      const existingSrv = services.find(
+                        (s) =>
+                          s.workId === activeDetailWork.id &&
+                          (s.eapServiceCode === srv.code || s.name.toLowerCase() === srv.name.toLowerCase())
+                      );
+                      const defaultResp = existingSrv?.responsibleName || srv.defaultResponsible || '';
+                      const laborData = serviceLaborMap[laborKey] || {
+                        laborType: existingSrv?.assignedEmployees?.some((e) => e.isOutsourced) ? 'terceirizada' : 'propria',
+                        contractorName: existingSrv?.assignedEmployees?.find((e) => e.companyName)?.companyName || '',
+                        responsibleName: defaultResp,
+                        helpers: (existingSrv?.assignedEmployees || [])
+                          .filter((e) => e.name !== defaultResp)
+                          .map((e) => e.name),
+                      };
+
+                      const isFechamento = isFechamentoService(srv.name, srv.categoryName, srv.subCategoryName);
+                      const isFinished = currentStatus === 'Concluído' || currentStatus === 'Finalizado';
+                      const hasWarning = isFechamento && isFinished && isInstallationsPendingAtLocation(apontamentoLocation, activeDetailWork.id);
+
                       return (
                         <div
                           key={srv.code}
-                          className="p-2.5 rounded-lg border border-slate-800/80 bg-slate-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                          className="p-3 rounded-xl border border-slate-800/80 bg-slate-900/50 space-y-3 shadow-sm"
                         >
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-mono text-[10px] text-slate-400 bg-slate-800 px-1.5 py-0.2 rounded">
-                                {srv.code}
-                              </span>
-                              <span className="text-xs font-semibold text-white">
-                                {srv.name}
-                              </span>
+                          {/* Cabeçalho do Serviço e Status */}
+                          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-mono text-[10px] text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">
+                                  {srv.code}
+                                </span>
+                                <span className="text-xs sm:text-sm font-semibold text-white">
+                                  {srv.name}
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-2 flex-wrap">
+                                <span>
+                                  Status no local: <strong className={currentStatus === 'Concluído' || currentStatus === 'Finalizado' ? 'text-emerald-400' : currentStatus === 'Em andamento' ? 'text-blue-400' : currentStatus === 'Paralisado' ? 'text-amber-400' : 'text-slate-400'}>{currentStatus}</strong>
+                                </span>
+                                {laborData.stopReason && (
+                                  <span className="px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-bold flex items-center gap-1 shadow-sm">
+                                    Motivo: {laborData.stopReason}
+                                  </span>
+                                )}
+                                {hasWarning && (
+                                  <span className="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-400 text-[10px] font-bold flex items-center gap-1 shadow-sm animate-pulse">
+                                    ⚠️ Fechamento com instalações pendentes
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                            <div className="text-[10px] text-slate-400 mt-0.5">
-                              Status atual: <span className="font-bold text-blue-400">{currentStatus}</span>
+
+                            {/* Botões estáticos obrigatórios: [Iniciar], [Paralisar], [Finalizar] + Motivo Rápido de Parada */}
+                            <div className="flex flex-col items-end gap-1.5 shrink-0 self-end sm:self-auto">
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetApontamentoStatus(srv, apontamentoLocation, 'Em andamento')}
+                                  className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs cursor-pointer shadow-sm transition-all"
+                                >
+                                  Iniciar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetApontamentoStatus(srv, apontamentoLocation, 'Paralisado')}
+                                  className="px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs cursor-pointer shadow-sm transition-all"
+                                >
+                                  Paralisar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetApontamentoStatus(srv, apontamentoLocation, 'Concluído')}
+                                  className="px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs cursor-pointer shadow-sm transition-all"
+                                >
+                                  Finalizar
+                                </button>
+                              </div>
+
+                              {/* 1. Motivo Rápido de Parada em 1 Clique */}
+                              {(currentStatus === 'Paralisado' || currentStatus === 'Não iniciado' || !!laborData.stopReason) && (
+                                <div className="flex items-center gap-1 flex-wrap justify-end pt-0.5">
+                                  {(['📦 Falta Material', '🌧️ Chuva/Clima', '👷 Aguardando Equipe'] as const).map((reason) => {
+                                    const isSelected = laborData.stopReason === reason;
+                                    return (
+                                      <button
+                                        key={reason}
+                                        type="button"
+                                        onClick={() => {
+                                          const nextReason = isSelected ? '' : reason;
+                                          updateLabor(srv.code, apontamentoLocation, { stopReason: nextReason });
+                                        }}
+                                        className={`px-1.5 py-0.5 rounded text-[10px] font-semibold transition-all border cursor-pointer ${
+                                          isSelected
+                                            ? 'bg-amber-500/25 border-amber-500 text-amber-300 font-bold'
+                                            : 'bg-slate-800 hover:bg-slate-700/80 border-slate-700/80 text-slate-300'
+                                        }`}
+                                      >
+                                        {reason}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
                           </div>
 
-                          {/* Botões estáticos obrigatórios: [Iniciar], [Paralisar], [Finalizar] */}
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => handleSetApontamentoStatus(srv, apontamentoLocation, 'Em andamento')}
-                              className="px-2.5 py-1 rounded bg-green-500 hover:bg-green-600 text-white font-bold text-xs cursor-pointer shadow-sm transition-all"
-                            >
-                              Iniciar
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleSetApontamentoStatus(srv, apontamentoLocation, 'Paralisado')}
-                              className="px-2.5 py-1 rounded bg-yellow-500 hover:bg-yellow-400 text-slate-950 font-bold text-xs cursor-pointer shadow-sm transition-all"
-                            >
-                              Paralisar
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleSetApontamentoStatus(srv, apontamentoLocation, 'Concluído')}
-                              className="px-2.5 py-1 rounded bg-blue-500 hover:bg-blue-600 text-white font-bold text-xs cursor-pointer shadow-sm transition-all"
-                            >
-                              Finalizar
-                            </button>
+                          {/* Campos de Equipe, Profissional e Ajudantes */}
+                          <div className="pt-2.5 border-t border-slate-800/80 space-y-2.5">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                              {/* Tipo de Mão de Obra */}
+                              <div>
+                                <span className="block text-[10px] uppercase font-bold text-slate-400 mb-1">
+                                  Tipo de Mão de Obra
+                                </span>
+                                <div className="flex items-center gap-3 bg-slate-950/70 p-1.5 px-2.5 rounded-lg border border-slate-800">
+                                  <label className="flex items-center gap-1.5 text-xs text-slate-200 cursor-pointer select-none">
+                                    <input
+                                      type="radio"
+                                      name={`laborType-${srv.code}-${apontamentoLocation}`}
+                                      checked={laborData.laborType === 'propria'}
+                                      onChange={() => updateLabor(srv.code, apontamentoLocation, { laborType: 'propria' })}
+                                      className="accent-blue-500"
+                                    />
+                                    <span>Equipe Própria</span>
+                                  </label>
+                                  <label className="flex items-center gap-1.5 text-xs text-slate-200 cursor-pointer select-none">
+                                    <input
+                                      type="radio"
+                                      name={`laborType-${srv.code}-${apontamentoLocation}`}
+                                      checked={laborData.laborType === 'terceirizada'}
+                                      onChange={() => updateLabor(srv.code, apontamentoLocation, { laborType: 'terceirizada' })}
+                                      className="accent-blue-500"
+                                    />
+                                    <span>Terceirizada</span>
+                                  </label>
+                                </div>
+                              </div>
+
+                              {/* Se Terceirizada, exiba input para o Nome da Empreiteira */}
+                              {laborData.laborType === 'terceirizada' && (
+                                <div>
+                                  <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">
+                                    Nome da Empreiteira *
+                                  </label>
+                                  <input
+                                    type="text"
+                                    placeholder="Ex: Empreiteira Alfa, Construtora Silva..."
+                                    value={laborData.contractorName}
+                                    onChange={(e) => updateLabor(srv.code, apontamentoLocation, { contractorName: e.target.value })}
+                                    className="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                                  />
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Input de texto para Profissional Responsável */}
+                            <div>
+                              <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">
+                                Profissional Responsável
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="Nome do encarregado ou oficial responsável..."
+                                value={laborData.responsibleName}
+                                onChange={(e) => updateLabor(srv.code, apontamentoLocation, { responsibleName: e.target.value })}
+                                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                              />
+                            </div>
+
+                            {/* Lista dinâmica de Ajudantes com botão + Adicionar Ajudante */}
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] uppercase font-bold text-slate-400">
+                                  Ajudantes Vinculados ({laborData.helpers.length})
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => addHelper(srv.code, apontamentoLocation)}
+                                  className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-blue-400 text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer border border-slate-700"
+                                >
+                                  <Plus className="w-3 h-3" />
+                                  <span>+ Adicionar Ajudante</span>
+                                </button>
+                              </div>
+
+                              {laborData.helpers.length === 0 ? (
+                                <p className="text-[11px] text-slate-500 italic">
+                                  Nenhum ajudante vinculado. Clique em "+ Adicionar Ajudante" para associar à equipe.
+                                </p>
+                              ) : (
+                                <div className="space-y-1.5">
+                                  {laborData.helpers.map((helper, hIdx) => (
+                                    <div key={hIdx} className="flex items-center gap-2">
+                                      <input
+                                        type="text"
+                                        placeholder={`Nome do ajudante ${hIdx + 1}...`}
+                                        value={helper}
+                                        onChange={(e) => updateHelper(srv.code, apontamentoLocation, hIdx, e.target.value)}
+                                        className="flex-1 px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => removeHelper(srv.code, apontamentoLocation, hIdx)}
+                                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-800 transition-colors cursor-pointer"
+                                        title="Remover ajudante"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       );
@@ -1298,14 +2013,24 @@ export const WorksView: React.FC = () => {
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setDashboardWork(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
-                title="Fechar Dashboard"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleCopyWhatsAppSummary}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                  title="Copiar Resumo para WhatsApp"
+                >
+                  <span>📲 Copiar Resumo WhatsApp</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDashboardWork(null)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+                  title="Fechar Dashboard"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Conteúdo com Scroll */}
